@@ -1,0 +1,7 @@
+Hello World
+
+This is a test.
+
+Multiple spaces should collapse.
+
+Extra unique content here.

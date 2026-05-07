@@ -1,0 +1,5 @@
+Text with leading spaces.
+
+Text with trailing spaces.
+
+Text with spaces on both sides.

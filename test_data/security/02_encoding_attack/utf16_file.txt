@@ -1,0 +1,2 @@
+This file uses UTF-16 encoding which might cause issues.
+Some systems may misinterpret the encoding.
