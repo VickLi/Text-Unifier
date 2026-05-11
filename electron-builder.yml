@@ -1,0 +1,41 @@
+appId: com.textunifier.app
+productName: "Text Unifier"
+copyright: "Text Unifier Team"
+
+directories:
+  output: release
+  buildResources: icons
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - electron/preload.d.ts
+  - native/*.node
+  - native/index.js
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: public/vite.svg
+
+electronDist: node_modules/electron/dist
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+
+portable:
+  artifactName: "TextUnifier_Portable_${version}.exe"
+  unpackDirName: "TextUnifier_Portable_${version}"
+
+extraResources:
+  - from: native
+    to: native
+    filter:
+      - "*.node"
+      - "index.js"
+      - "package.json"
