@@ -1,6 +1,6 @@
 [package]
 name = "text-unifier-core"
-version = "3.2.1"
+version = "3.2.2"
 description = "Text Unifier 核心引擎 — napi-rs 原生模块"
 authors = ["Text Unifier Team"]
 edition = "2021"

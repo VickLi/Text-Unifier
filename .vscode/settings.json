@@ -1,0 +1,19 @@
+{
+    "python-envs.pythonProjects": [
+        {
+            "path": ".",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
+    ],
+    "editor.wordWrap": "on",
+    "editor.wrappingIndent": "none",
+    "editor.minimap.enabled": false,
+    "editor.detectIndentation": false,
+    "chat.tools.terminal.autoApprove": {
+        "/^npx tsc -p tsconfig\\.electron\\.json 2>&1$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

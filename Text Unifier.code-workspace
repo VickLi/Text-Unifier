@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+    ],
+    "settings": {
+        "chat.tools.terminal.autoApprove": {
+            "/^npx tsc -p tsconfig\\.electron\\.json 2>&1$/": {
+                "approve": true,
+                "matchCommandLine": true
+            }
+        }
+    }
+}

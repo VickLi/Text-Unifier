@@ -54,10 +54,12 @@ export function useGlobalDragDrop(
     (e: DragEvent) => {
       e.preventDefault();
       dragCounterRef.current++;
-      const hasNonTxt = Array.from(e.dataTransfer?.files || []).some(
-        (f) => !f.name.toLowerCase().endsWith('.txt')
-      );
-      setDragOverlay(true, hasNonTxt);
+      // 检查是否拖入的是文件（而非文本/链接等）
+      const isFileDrag = Array.from(e.dataTransfer?.types || []).includes('Files');
+      if (!isFileDrag) return;
+      // 注意: OS 文件拖入时 dataTransfer.files 在 dragenter 中为空（浏览器安全限制）
+      // 因此无法在此处精确判断是否为 .txt，实际过滤在 drop 事件中执行
+      setDragOverlay(true, false);
     },
     [setDragOverlay]
   );
@@ -72,6 +74,14 @@ export function useGlobalDragDrop(
       }
     },
     [setDragOverlay]
+  );
+
+  const handleDragOver = useCallback(
+    (e: DragEvent) => {
+      // 必须 preventDefault() 才能使 drop 事件触发
+      e.preventDefault();
+    },
+    []
   );
 
   const handleDrop = useCallback(
@@ -99,12 +109,14 @@ export function useGlobalDragDrop(
 
   useEffect(() => {
     document.addEventListener('dragenter', handleDragEnter);
+    document.addEventListener('dragover', handleDragOver);
     document.addEventListener('dragleave', handleDragLeave);
     document.addEventListener('drop', handleDrop);
     return () => {
       document.removeEventListener('dragenter', handleDragEnter);
+      document.removeEventListener('dragover', handleDragOver);
       document.removeEventListener('dragleave', handleDragLeave);
       document.removeEventListener('drop', handleDrop);
     };
-  }, [handleDragEnter, handleDragLeave, handleDrop]);
+  }, [handleDragEnter, handleDragOver, handleDragLeave, handleDrop]);
 }
