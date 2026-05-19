@@ -3,13 +3,44 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 // 加载 napi-rs 编译的原生模块
-// 使用 process.resourcesPath 确保在 asar 中也能正确寻址
 let nativeModule: any;
 try {
-  const nativePath = process.resourcesPath
-    ? path.join(process.resourcesPath, 'native/index.js')
-    : path.join(__dirname, '../../../native/index.js');
-  nativeModule = require(nativePath);
+  const possiblePaths: string[] = [];
+
+  // 方案 1: process.resourcesPath（asar 打包后）
+  if (process.resourcesPath) {
+    possiblePaths.push(path.join(process.resourcesPath, 'native/index.js'));
+  }
+
+  // 方案 2: 相对于 __dirname（开发环境 / 未打包）
+  possiblePaths.push(path.join(__dirname, '../../../native/index.js'));
+  possiblePaths.push(path.join(__dirname, '../native/index.js'));
+  possiblePaths.push(path.join(__dirname, '../../native/index.js'));
+
+  // 方案 3: 相对于应用根目录
+  if (app && app.getAppPath) {
+    possiblePaths.push(path.join(app.getAppPath(), 'native/index.js'));
+  }
+
+  let lastError: Error | null = null;
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        nativeModule = require(p);
+        if (nativeModule) break;
+      }
+    } catch (e: any) {
+      lastError = e;
+    }
+  }
+
+  if (!nativeModule) {
+    console.error('所有路径尝试均失败:');
+    for (const p of possiblePaths) {
+      console.error(`  ${p}: ${fs.existsSync(p) ? '存在但加载失败' : '不存在'}`);
+    }
+    if (lastError) console.error('最后错误:', lastError);
+  }
 } catch (e) {
   console.error('核心引擎加载失败:', e);
 }
@@ -118,7 +149,13 @@ ipcMain.handle('select-files', async () => {
 
 app.whenReady().then(() => {
   if (!nativeModule) {
-    dialog.showErrorBox('启动失败', '核心引擎加载失败，请重新安装应用。');
+    const msg = '核心引擎加载失败，请重新安装应用。\n\n' +
+                '可能的原因：\n' +
+                '1. native/text-unifier-core.win32-x64-msvc.node 文件缺失或损坏\n' +
+                '2. Node.js 与 Electron 版本不兼容\n' +
+                '3. 缺少 Visual C++ 运行库\n\n' +
+                '请查看控制台输出获取详细错误信息。';
+    dialog.showErrorBox('启动失败', msg);
     app.quit();
     return;
   }
