@@ -14,7 +14,6 @@ import type {
   Snapshot,
   DiffAlignment,
 } from '../types';
-import { formatDocument } from '../utils/ipc';
 import { DEFAULT_CLEAN_OPTIONS, DEFAULT_FORMAT_OPTIONS, DEFAULT_V3_2_STATE } from './defaults';
 
 // ==========================================
@@ -60,9 +59,6 @@ interface AppState {
   /** 后端返回的原始预览段落（只读） */
   originalPreview: PreviewParagraph[];
 
-  /** @deprecated V2.0 用 paragraphCheckedMap 替代 */
-  checkedHashes: Set<string>;
-
   /** 悬停状态 */
   hoveredParagraphId: string | null;
   hoveredSourceFiles: string[];
@@ -98,7 +94,7 @@ interface AppState {
   /** 排版前快照（用于还原） */
   formatSnapshot: PreviewParagraph[] | null;
 
-  /** 是否正在执行排版 */
+  /** 是否正在执行处理 */
   isFormatting: boolean;
 
   /** 是否有可还原的快照 */
@@ -119,8 +115,6 @@ interface AppState {
     previewParagraphs: PreviewParagraph[],
     filesMetadata?: { fileName: string; fileSize: number; modified: number }[]
   ) => void;
-  /** @deprecated V2.0 用 toggleGroupCheckV2 替代 */
-  toggleGroupCheck: (groupId: string) => void;
   setHoveredParagraph: (
     id: string | null,
     sourceFiles?: string[],
@@ -167,9 +161,6 @@ interface AppState {
   // V2.0 新增 Actions — RQ-03
   // ═══════════════════════════════════════════
 
-  /** 执行文档排版 */
-  formatDocumentAction: () => Promise<void>;
-
   /** 还原至排版前状态 */
   revertFormatting: () => void;
 
@@ -183,8 +174,6 @@ interface AppState {
   // ═══════════════════════════════════════════
   // V3.1 新增 Actions — 内容清洗与排版增强
 
-  /** 内部: 更新章节列表 */
-  _updateChapterList: () => void;
   // ═══════════════════════════════════════════
 
   cleanOptions: CleanOptions;
@@ -214,7 +203,6 @@ interface AppState {
 
   isEditing: boolean;
   toggleEditing: () => void;
-  updateParagraphText: (id: string, text: string) => void;
 
   // ═══════════════════════════════════════════
   // V3.2 新增字段 — 撤回栈
@@ -259,7 +247,6 @@ export const useStore = create<AppState>((set, get) => ({
   fileList: [],
   duplicateGroups: [],
   originalPreview: [],
-  checkedHashes: new Set<string>(),
   hoveredParagraphId: null,
   hoveredSourceFiles: [],
   hoverPosition: null,
@@ -353,27 +340,12 @@ export const useStore = create<AppState>((set, get) => ({
         originalPreview: previewParagraphs,
         previewParagraphs,
         paragraphCheckedMap: newCheckedMap,
-        checkedHashes: new Set<string>(),
         formatSnapshot: null,
         canRevert: false,
         lastClickedParagraphId: null,
         status: 'ready',
         errorMessage: null,
       };
-    }),
-
-  toggleGroupCheck: (groupId) =>
-    set((state) => {
-      const group = state.duplicateGroups.find((g) => g.id === groupId);
-      if (!group) return state;
-
-      const newChecked = new Set(state.checkedHashes);
-      if (newChecked.has(group.contentHash)) {
-        newChecked.delete(group.contentHash);
-      } else {
-        newChecked.add(group.contentHash);
-      }
-      return { checkedHashes: newChecked };
     }),
 
   setHoveredParagraph: (id, sourceFiles, position) =>
@@ -392,7 +364,6 @@ export const useStore = create<AppState>((set, get) => ({
       duplicateGroups: [],
       originalPreview: [],
       previewParagraphs: [],
-      checkedHashes: new Set<string>(),
       paragraphCheckedMap: new Map<string, boolean>(),
       formatSnapshot: null,
       canRevert: false,
@@ -553,92 +524,6 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
   // ═══════════════════════════════════════════
-
-  formatDocumentAction: async () => {
-    const state = get();
-
-    if (state.isFormatting) return;
-
-    // 1. 保存快照
-    const snapshot = state.previewParagraphs.map((p) => ({ ...p }));
-
-    // 2. 构建待排版文本（仅已勾选段落）
-    const checkedParas = state.previewParagraphs.filter(
-      (p) => (state.paragraphCheckedMap.get(p.id) ?? true) !== false
-    );
-    const textToFormat = checkedParas.map((p) => p.text).join('\n\n');
-
-    set({
-      formatSnapshot: snapshot,
-      isFormatting: true,
-      canRevert: false,
-    });
-
-    try {
-      // 3. 调用后端
-      const result = await formatDocument(textToFormat);
-
-      // 4. 拆分排版后文本
-      const formattedTexts = result.formattedText.split('\n\n');
-
-      // 5. 重建 previewParagraphs
-      const newParagraphs: PreviewParagraph[] = [];
-      let formattedIdx = 0;
-
-      for (const originalPara of state.previewParagraphs) {
-        const isChecked = (state.paragraphCheckedMap.get(originalPara.id) ?? true) !== false;
-        if (isChecked && formattedIdx < formattedTexts.length) {
-          const newText = formattedTexts[formattedIdx];
-          const hash = await computeContentHash(newText);
-          newParagraphs.push({
-            ...originalPara,
-            text: newText,
-            contentHash: hash,
-          });
-          formattedIdx++;
-        } else {
-          newParagraphs.push({ ...originalPara });
-        }
-      }
-
-      // 如果排版导致段落数变化，剩余格式化文本追加
-      while (formattedIdx < formattedTexts.length) {
-        const newText = formattedTexts[formattedIdx];
-        if (newText.trim()) {
-          const hash = await computeContentHash(newText);
-          newParagraphs.push({
-            id: `fmt_${formattedIdx}`,
-            text: newText,
-            contentHash: hash,
-            sourceFiles: [],
-            isOriginal: false,
-          });
-        }
-        formattedIdx++;
-      }
-
-      // BUG-024: 重建勾选状态映射 — 直接按 paragraphId 保留原状态
-      // 排版不改段落顺序，previewParagraphs 和 newParagraphs 的 id 一一对应
-      const rebuiltCheckedMap = new Map<string, boolean>();
-      for (const p of newParagraphs) {
-        // 直接使用 paragraphId 匹配，不依赖 content_hash（排版后 hash 会变）
-        const oldState = state.paragraphCheckedMap.get(p.id);
-        rebuiltCheckedMap.set(p.id, oldState ?? true);
-      }
-
-      set({
-        previewParagraphs: newParagraphs,
-        paragraphCheckedMap: rebuiltCheckedMap,
-        isFormatting: false,
-        canRevert: true,
-      });
-    } catch (error) {
-      set({
-        isFormatting: false,
-        errorMessage: `排版失败: ${error}`,
-      });
-    }
-  },
 
   revertFormatting: () =>
     set((state) => {
@@ -851,30 +736,6 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  _updateChapterList: () => {
-    const state = get();
-    const allText = state.previewParagraphs
-      .filter((p) => (state.paragraphCheckedMap.get(p.id) ?? true) !== false)
-      .map((p) => p.text)
-      .join('\n');
-    const lines = allText.split('\n');
-    const chapters: ChapterInfo[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (/^第[〇零一二三四五六七八九十百千万\d]+[章节回卷部](?:[\s\.,;:。，；：、]|$)|^Chapter\s*[\dIVXLCDM]+(?:[\s\.,;:]|$)/i.test(line)) {
-        let order: number | null = null;
-        const arMatch = line.match(/^第(\d+)\s*[章节回卷部]/);
-        if (arMatch) order = parseInt(arMatch[1], 10);
-        else {
-          const enMatch = line.match(/^Chapter\s*(\d+)/i);
-          if (enMatch) order = parseInt(enMatch[1], 10);
-        }
-        chapters.push({ title: line, order, startIndex: i, paragraphCount: 0 });
-      }
-    }
-    set({ chapterList: chapters });
-  },
-
   // ═══════════════════════════════════════════
   // V3.2 Actions
   // ═══════════════════════════════════════════
@@ -894,13 +755,6 @@ export const useStore = create<AppState>((set, get) => ({
     }),
 
   toggleEditing: () => set((state) => ({ isEditing: !state.isEditing })),
-
-  updateParagraphText: (id, text) =>
-    set((state) => ({
-      previewParagraphs: state.previewParagraphs.map((p) =>
-        p.id === id ? { ...p, text } : p
-      ),
-    })),
 
   pushSnapshot: (reason) =>
     set((state) => {
@@ -964,21 +818,6 @@ export const useStore = create<AppState>((set, get) => ({
 // ==========================================
 
 /**
- * 计算活跃预览段落（兼容 V1.0 checkedHashes 过滤逻辑）
- */
-export function computeActivePreview(
-  originalPreview: PreviewParagraph[],
-  checkedHashes: Set<string>
-): PreviewParagraph[] {
-  if (checkedHashes.size === 0) {
-    return originalPreview;
-  }
-  return originalPreview.filter(
-    (para) => !checkedHashes.has(para.contentHash)
-  );
-}
-
-/**
  * 计算已排除段落数
  */
 export function computeExcludedCount(
@@ -1039,18 +878,4 @@ export function computeExportParagraphs(
   return previewParagraphs.filter(
     (p) => (paragraphCheckedMap.get(p.id) ?? true) !== false
   );
-}
-
-/**
- * 将 checkedHashes 序列化为数组（兼容 JSON 持久化）
- */
-export function serializeCheckedHashes(hashes: Set<string>): string[] {
-  return Array.from(hashes);
-}
-
-/**
- * 将数组反序列化为 Set（兼容 JSON 持久化）
- */
-export function deserializeCheckedHashes(arr: string[]): Set<string> {
-  return new Set(arr);
 }

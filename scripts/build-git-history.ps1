@@ -2,7 +2,8 @@
 # 从 V1.0 到 V3.2.1，每个版本一个 commit，每小时一个版本
 
 $env:Path = "C:\Program Files\Git\bin;$env:Path"
-cd "G:\CodeProject\Text Unifier"
+$projectRoot = Split-Path -Parent $PSScriptRoot
+cd $projectRoot
 
 # 如果已存在提交，先重置
 if (git log --oneline 2>$null) {

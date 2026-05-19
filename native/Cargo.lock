@@ -520,7 +520,7 @@ dependencies = [
 
 [[package]]
 name = "text-unifier-core"
-version = "3.2.1"
+version = "3.2.3"
 dependencies = [
  "anyhow",
  "encoding_rs",

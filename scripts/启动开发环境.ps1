@@ -6,12 +6,23 @@ $ErrorActionPreference = "Stop"
 # 设置 PATH
 $env:Path = "$env:USERPROFILE\.cargo\bin;$env:USERPROFILE\.node-portable;$env:Path"
 
-# 配置 MSVC 编译环境
-$vcDir = "$env:USERPROFILE\.vs\VC\Tools\MSVC\14.44.35207"
-$kitVer = "10.0.26100.0"
+# 配置 MSVC 编译环境（动态检测最新版本）
+$vcBase = "$env:USERPROFILE\.vs\VC\Tools\MSVC"
 $kitRoot = "C:\Program Files (x86)\Windows Kits\10"
 
-if (Test-Path $vcDir) {
+if (Test-Path $vcBase) {
+    # 自动选择最新 MSVC 版本
+    $vcVer = Get-ChildItem $vcBase -Directory | Sort-Object Name -Descending | Select-Object -First 1
+    $vcDir = $vcVer.FullName
+    # 自动选择最新 Windows SDK 版本
+    $kitInclude = "$kitRoot\Include"
+    if (Test-Path $kitInclude) {
+        $kitVerDir = Get-ChildItem $kitInclude -Directory | Sort-Object Name -Descending | Select-Object -First 1
+        $kitVer = $kitVerDir.Name
+    } else {
+        $kitVer = "10.0.26100.0"
+    }
+
     $env:Path = "$vcDir\bin\Hostx64\x64;$env:Path"
     $env:INCLUDE = "$vcDir\include;$kitRoot\Include\$kitVer\um;$kitRoot\Include\$kitVer\shared;$kitRoot\Include\$kitVer\ucrt"
     $env:LIB = "$vcDir\lib\x64;$kitRoot\Lib\$kitVer\um\x64;$kitRoot\Lib\$kitVer\ucrt\x64"
@@ -22,5 +33,6 @@ if (Test-Path $vcDir) {
 
 # 启动开发服务器
 Write-Host "正在启动 Tauri 开发服务器..." -ForegroundColor Cyan
-cd "g:\CodeProject\Text Unifier"
+$projectRoot = Split-Path -Parent $PSScriptRoot
+cd $projectRoot
 npm run tauri dev

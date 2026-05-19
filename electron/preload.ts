@@ -1,14 +1,13 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // V3.0 已有
   scanFiles: (paths: string[]) => ipcRenderer.invoke('scan-files', paths),
-  formatDocument: (text: string) => ipcRenderer.invoke('format-document', text),
   exportFile: (paragraphs: string[]) => ipcRenderer.invoke('export-file', paragraphs),
   selectFiles: () => ipcRenderer.invoke('select-files'),
-
-  // V3.1 新增
   detectEncoding: (filePath: string) => ipcRenderer.invoke('detect-encoding', filePath),
-  scanPreprocessedTexts: (texts: string[], fileNames: string[], fileSizes: number[]) =>
-    ipcRenderer.invoke('scan-preprocessed-texts', texts, fileNames, fileSizes),
+  /**
+   * 获取拖放文件的真实路径（Electron 28+ 推荐方式）
+   * 解决 File.path 异步填充导致的取值为空问题 (BUG-V3.2.2-001)
+   */
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 });

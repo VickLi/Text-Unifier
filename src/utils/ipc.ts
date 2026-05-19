@@ -2,7 +2,7 @@
  * IPC 通信层（V3.1：Electron contextBridge + novelProcessor）
  */
 
-import type { AnalysisReport, FormatResult } from '../types';
+import type { AnalysisReport } from '../types';
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 500;
@@ -27,10 +27,9 @@ async function withRetry<T>(fn: () => Promise<T>, retries = MAX_RETRIES): Promis
 }
 
 // ═══════════════════════════════════════════
-// 接口 1: scanFiles — 扫描分析（兼容旧路径）
+// 接口 1: scanFiles — 扫描分析
 // ═══════════════════════════════════════════
 
-/** @deprecated V3.1 推荐使用 scanPreprocessedTexts */
 export async function scanFiles(paths: string[]): Promise<AnalysisReport> {
   return withRetry(() => getAPI().scanFiles(paths));
 }
@@ -44,27 +43,7 @@ export async function detectEncoding(filePath: string): Promise<string> {
 }
 
 // ═══════════════════════════════════════════
-// 接口 3: scanPreprocessedTexts 🆕 V3.1
-// ═══════════════════════════════════════════
-
-export async function scanPreprocessedTexts(
-  texts: string[],
-  fileNames: string[],
-  fileSizes: number[]
-): Promise<AnalysisReport> {
-  return withRetry(() => getAPI().scanPreprocessedTexts(texts, fileNames, fileSizes));
-}
-
-// ═══════════════════════════════════════════
-// 接口 4: formatDocument（保留兼容）
-// ═══════════════════════════════════════════
-
-export async function formatDocument(text: string): Promise<FormatResult> {
-  return withRetry(() => getAPI().formatDocument(text));
-}
-
-// ═══════════════════════════════════════════
-// 接口 5: exportFile
+// 接口 3: exportFile
 // ═══════════════════════════════════════════
 
 export async function exportFile(paragraphs: string[]): Promise<{ savedPath: string }> {
@@ -77,5 +56,34 @@ export async function exportFile(paragraphs: string[]): Promise<{ savedPath: str
 
 export async function selectTxtFiles(): Promise<{ name: string; path: string; size: number }[]> {
   return withRetry(() => getAPI().selectFiles());
+}
+
+// ═══════════════════════════════════════════
+// 工具: getPathForFile — 获取拖放文件路径
+// ═══════════════════════════════════════════
+
+/**
+ * 从 File 对象获取文件系统路径（Electron 专用）
+ * V3.2.3: 使用 webUtils.getPathForFile() 作为主方案（同步可靠）
+ * File.path 作为降级方案（异步填充可能为空）
+ */
+export function getFilePath(file: File): string {
+  // 方案 1: webUtils.getPathForFile() — Electron 28+ 推荐
+  try {
+    const api = getAPI();
+    if (typeof api.getPathForFile === 'function') {
+      const path = api.getPathForFile(file);
+      if (path && typeof path === 'string' && path.length > 0) return path;
+    }
+  } catch {
+    // 降级到方案 2
+  }
+
+  // 方案 2: File.path — 传统方式（可能在拖放事件中异步填充为空）
+  const legacyPath = (file as any).path;
+  if (legacyPath && typeof legacyPath === 'string' && legacyPath.length > 0) return legacyPath;
+
+  // 方案 3: 仅返回文件名（最后兜底）
+  return file.name;
 }
 

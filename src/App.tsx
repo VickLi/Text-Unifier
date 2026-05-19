@@ -79,7 +79,7 @@ const App: React.FC = () => {
             文档终版确定器
           </h1>
           <span className="text-xs text-white bg-blue-500 px-2 py-0.5 rounded">
-            Text Unifier v3.2.2
+            Text Unifier v3.2.3
           </span>
         </div>
         <div className="flex items-center gap-3">

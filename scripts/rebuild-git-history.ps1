@@ -2,15 +2,16 @@
 # Creates 9 version commits with proper timestamps, excluding large binaries
 
 $env:Path = "C:\Program Files\Git\bin;$env:Path"
-cd "G:\CodeProject\Text Unifier"
+$projectRoot = Split-Path -Parent $PSScriptRoot
+cd $projectRoot
 
 # Clean slate
 Remove-Item ".git" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item ".gitignore" -Force -ErrorAction SilentlyContinue
 
 git init
-git config user.name "VickLi"
-git config user.email "hbxgswgr@gmail.com"
+git config user.name "Developer"
+git config user.email "dev@example.com"
 
 # Create thorough .gitignore excluding large binaries
 $ignoreLines = @(

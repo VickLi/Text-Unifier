@@ -27,6 +27,13 @@ function createWindow() {
     },
   });
 
+  // V3.2.3: 阻止文件拖放导致的页面导航
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('file://')) {
+      event.preventDefault();
+    }
+  });
+
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:1420');
   } else {
@@ -59,18 +66,6 @@ ipcMain.handle('scan-files', async (_event, paths: string[]) => {
 ipcMain.handle('detect-encoding', async (_event, filePath: string) => {
   if (!nativeModule) throw new Error('核心引擎未初始化');
   return nativeModule.detectEncoding(filePath);
-});
-
-/** V3.1 预处理文本的归一化+去重 */
-ipcMain.handle('scan-preprocessed-texts', async (_event, texts: string[], fileNames: string[], fileSizes: number[]) => {
-  if (!nativeModule) throw new Error('核心引擎未初始化');
-  return nativeModule.scanPreprocessedTexts(texts, fileNames, fileSizes);
-});
-
-/** 文档排版（保留兼容） */
-ipcMain.handle('format-document', async (_event, text: string) => {
-  if (!nativeModule) throw new Error('核心引擎未初始化');
-  return nativeModule.formatDocument(text);
 });
 
 /** 导出文件（打开保存对话框 + 写入） */

@@ -27,22 +27,5 @@ export const SENTENCE_END = /[。！？」）〗》』"']$/;
 // 列表标记
 export const LIST_MARKERS = /^[-*•·]|^\d+[.、]|^[①②③④⑤⑥⑦⑧⑨⑩]/;
 
-// 广告水印关键词
-export const AD_PATTERNS: RegExp[] = [
-  /本文是使用怠惰小说下载器下载的/,
-  /刺猬猫.*飞卢.*点娘.*少年梦/,
-  /本书由.*整理/,
-  /请在下载后\d+小时内删除/,
-  /分卷阅读\d*/,
-  /^={5,}$/,
-  /如不慎该资源侵犯了您的权益/,
-];
-
 // 行尾数字（页码）
 export const LINE_END_NUMBERS = /\d{2,}$/;
-
-// 中文逗号/分号/顿号（用于段落拆分）
-export const CN_MID_PUNCT = /[，；、]/;
-
-// 全角字符范围
-export const FULLWIDTH_RANGE = /[\uFF01-\uFF5E]/;

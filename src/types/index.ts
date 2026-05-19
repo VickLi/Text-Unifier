@@ -62,14 +62,6 @@ export interface SortableFile {
   encoding: string;
 }
 
-/** 排版结果（V2.0 新增） */
-export interface FormatResult {
-  formattedText: string;
-  paragraphCount: number;
-  protectedBlocks: number;
-  mergedBlocks: number;
-}
-
 /** 三态复选框状态 */
 export type TriState = 'checked' | 'unchecked' | 'indeterminate';
 

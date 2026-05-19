@@ -19,7 +19,8 @@ win:
       arch: [x64]
     - target: portable
       arch: [x64]
-  icon: public/vite.svg
+  certificateSubjectName: ""
+  verifyUpdateCodeSignature: false
 
 electronDist: node_modules/electron/dist
 

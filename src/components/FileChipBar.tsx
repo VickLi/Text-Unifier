@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -15,7 +15,7 @@ import {
 } from '@dnd-kit/sortable';
 import { useStore } from '../store/useStore';
 import { SortableChip } from './SortableChip';
-import { UploadButton } from './UploadButton';
+import { getFilePath } from '../utils/ipc';
 
 interface FileChipBarProps {
   onFilesSelected: (files: { name: string; path: string; size: number }[]) => void;
@@ -30,6 +30,8 @@ export const FileChipBar: React.FC<FileChipBarProps> = ({ onFilesSelected }) => 
   const reorderFiles = useStore((s) => s.reorderFiles);
   const triggerReanalysis = useStore((s) => s.triggerReanalysis);
   const removeFile = useStore((s) => s.removeFile);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isHover, setIsHover] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 12 } }), // BUG-V3.2-004: 12px 防止误触
@@ -70,7 +72,40 @@ export const FileChipBar: React.FC<FileChipBarProps> = ({ onFilesSelected }) => 
           ))}
         </SortableContext>
       </DndContext>
-      <UploadButton onFilesSelected={onFilesSelected} />
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        onMouseEnter={() => setIsHover(true)}
+        onMouseLeave={() => setIsHover(false)}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed transition-all ${
+          isHover
+            ? 'border-blue-400 bg-blue-50 text-blue-600'
+            : 'border-gray-300 text-gray-500 hover:border-gray-400'
+        }`}
+        aria-label="添加 .txt 文件"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        添加 .txt 文件
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".txt"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            const files = Array.from(e.target.files).map((f) => ({
+              name: f.name,
+              path: getFilePath(f),
+              size: f.size,
+            }));
+            onFilesSelected(files);
+          }
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 };

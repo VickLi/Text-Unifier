@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store/useStore';
+import { getFilePath } from '../utils/ipc';
 
 /**
  * 全窗口拖拽遮罩（V3.2 RQ-02）
@@ -90,13 +91,21 @@ export function useGlobalDragDrop(
       dragCounterRef.current = 0;
       setDragOverlay(false, false);
 
-      if (!e.dataTransfer?.files || e.dataTransfer.files.length === 0) return;
+      // 安全访问 dataTransfer.files（可能因跨域/安全策略抛出异常）
+      let files: FileList | null = null;
+      try {
+        files = e.dataTransfer?.files ?? null;
+      } catch {
+        return;
+      }
 
-      const validFiles = Array.from(e.dataTransfer.files)
+      if (!files || files.length === 0) return;
+
+      const validFiles = Array.from(files)
         .filter((f) => f.name.toLowerCase().endsWith('.txt'))
         .map((f) => ({
           name: f.name,
-          path: (f as any).path || f.name,
+          path: getFilePath(f),
           size: f.size,
         }));
 
