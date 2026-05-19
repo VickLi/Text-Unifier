@@ -1,0 +1,5 @@
+This is completely different content.
+
+Nothing in common with the other file.
+
+So no duplicates should be detected.

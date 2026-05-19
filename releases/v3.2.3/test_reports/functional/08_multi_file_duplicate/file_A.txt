@@ -1,0 +1,5 @@
+Only in A paragraph.
+
+Common paragraph across all files.
+
+Another A-specific paragraph.

@@ -83,13 +83,21 @@ export const DiffViewer: React.FC = () => {
     );
   }
 
-  const colorClass = (type: string) => {
+  // 每个面板独立着色：只为自己有内容的行着色，对方独有的行显示空白
+  const leftColor = (type: string) => {
     switch (type) {
       case 'match': return 'bg-green-50 border-l-4 border-green-400';
       case 'leftOnly': return 'bg-red-50 border-l-4 border-red-400';
+      case 'diff': return 'bg-gray-100 border-l-4 border-gray-400';
+      default: return ''; // rightOnly → 左栏空白
+    }
+  };
+  const rightColor = (type: string) => {
+    switch (type) {
+      case 'match': return 'bg-green-50 border-l-4 border-green-400';
       case 'rightOnly': return 'bg-blue-50 border-l-4 border-blue-400';
       case 'diff': return 'bg-gray-100 border-l-4 border-gray-400';
-      default: return '';
+      default: return ''; // leftOnly → 右栏空白
     }
   };
 
@@ -105,14 +113,14 @@ export const DiffViewer: React.FC = () => {
       <div className="flex-1 flex min-h-0">
         <div ref={leftRef} onScroll={onLeftScroll} className="flex-1 overflow-y-auto border-r border-gray-200">
           {diffAlignment.map((item, idx) => (
-            <div key={idx} className={`px-4 py-2 text-sm ${colorClass(item.type)} ${item.type === 'rightOnly' ? 'opacity-30' : ''}`}>
+            <div key={idx} className={`px-4 py-2 text-sm ${leftColor(item.type)}`}>
               <p className="whitespace-pre-wrap break-words">{item.leftText || ''}</p>
             </div>
           ))}
         </div>
         <div ref={rightRef} onScroll={onRightScroll} className="flex-1 overflow-y-auto">
           {diffAlignment.map((item, idx) => (
-            <div key={idx} className={`px-4 py-2 text-sm ${colorClass(item.type)} ${item.type === 'leftOnly' ? 'opacity-30' : ''}`}>
+            <div key={idx} className={`px-4 py-2 text-sm ${rightColor(item.type)}`}>
               {item.type === 'diff' && item.diffTokens ? (
                 <p className="whitespace-pre-wrap break-words">
                   {item.diffTokens.map((tok, ti) => (
