@@ -3,9 +3,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 // 加载 napi-rs 编译的原生模块
+// 使用 process.resourcesPath 确保在 asar 中也能正确寻址
 let nativeModule: any;
 try {
-  nativeModule = require(path.join(__dirname, '../native/index.js'));
+  const nativePath = process.resourcesPath
+    ? path.join(process.resourcesPath, 'native/index.js')
+    : path.join(__dirname, '../../../native/index.js');
+  nativeModule = require(nativePath);
 } catch (e) {
   console.error('核心引擎加载失败:', e);
 }
