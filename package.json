@@ -3,11 +3,11 @@
   "private": true,
   "version": "3.2.3",
   "type": "module",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "electron:ts": "tsc -p tsconfig.electron.json",
+    "electron:ts": "tsc -p tsconfig.electron.json && node scripts/rename-electron-output.cjs",
     "electron:dev": "npm run electron:ts && vite build && electron .",
     "electron:build": "npm run electron:ts && vite build && cd native && napi build --platform --release && cd .. && electron-builder",
     "napi:build": "cd native && napi build --platform --release",

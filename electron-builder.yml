@@ -19,8 +19,7 @@ win:
       arch: [x64]
     - target: portable
       arch: [x64]
-  certificateSubjectName: ""
-  verifyUpdateCodeSignature: false
+  sign: false
 
 electronDist: node_modules/electron/dist
 

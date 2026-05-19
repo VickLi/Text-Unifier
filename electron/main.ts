@@ -21,7 +21,7 @@ function createWindow() {
     title: '文档终版确定器 - Text Unifier',
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
