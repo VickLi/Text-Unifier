@@ -83,7 +83,7 @@ export interface CleanOptions {
   conversionMode: ConversionMode;
   toHalfWidth: boolean;
   stripArtifacts: boolean;
-  removeLineEndNumbers: boolean;
+  // removeLineEndNumbers 已在 V3.3 RQ-07 中移除
   filterKeywords: string;
   filterMaxLength: number;
 }
@@ -123,7 +123,7 @@ export interface Snapshot {
 
 /** 文档对比对齐项 */
 export interface DiffAlignment {
-  type: 'match' | 'leftOnly' | 'rightOnly' | 'diff';
+  type: 'match' | 'leftOnly' | 'rightOnly' | 'bothOnly' | 'diff';
   leftText?: string;
   rightText?: string;
   diffTokens?: DiffToken[];
@@ -133,4 +133,14 @@ export interface DiffAlignment {
 export interface DiffToken {
   text: string;
   isDiff: boolean;
+}
+
+// ═══════════════════════════════════════════
+// V3.3 新增类型
+// ═══════════════════════════════════════════
+
+/** Minimap 色条项 */
+export interface MinimapItem {
+  color: 'green' | 'red' | 'orange';
+  tooltip: string;
 }

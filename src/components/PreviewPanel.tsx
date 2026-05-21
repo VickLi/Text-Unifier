@@ -1,9 +1,11 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { computeExcludedCount, computeSelectAllState } from '../store/useStore';
 import { PreviewParagraph } from './PreviewParagraph';
 import { Tooltip } from './Tooltip';
+import { Minimap } from './Minimap';
 import { useShiftSelect } from '../hooks/useShiftSelect';
+import { useHighlightTimeout } from '../hooks/useHighlightTimeout';
 
 /**
  * 预览面板组件（V3.2 增强版：可编辑 + 撤回栈）
@@ -23,6 +25,30 @@ export const PreviewPanel: React.FC = () => {
   const redo = useStore((s) => s.redo);
   const undoStack = useStore((s) => s.undoStack);
   const undoPointer = useStore((s) => s.undoPointer);
+  // V3.3 新增字段
+  const minimapItems = useStore((s) => s.minimapItems);
+  const modifiedParagraphIds = useStore((s) => s.modifiedParagraphIds);
+  const highlightedLineIndex = useStore((s) => s.highlightedLineIndex);
+  const jumpToParagraph = useStore((s) => s.jumpToParagraph);
+  const _updateMinimap = useStore((s) => s._updateMinimap);
+
+  // V3.3: Minimap 数据在段落变化时更新
+  useEffect(() => { _updateMinimap(); }, [previewParagraphs, paragraphCheckedMap, modifiedParagraphIds, _updateMinimap]);
+
+  // V3.3: 搜索高亮消退
+  useHighlightTimeout(highlightedLineIndex, () => useStore.setState({ highlightedLineIndex: null }));
+
+  // V3.3.1 BUG-002 修复：预览区滚动联动 Minimap 可视范围
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [visibleRange, setVisibleRange] = useState<[number, number]>([0, previewParagraphs.length - 1]);
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || previewParagraphs.length === 0) return;
+    const rowHeight = 60; // 估算每段落行高 px
+    const startIdx = Math.floor(el.scrollTop / rowHeight);
+    const visibleCount = Math.ceil(el.clientHeight / rowHeight);
+    setVisibleRange([Math.max(0, startIdx), Math.min(previewParagraphs.length - 1, startIdx + visibleCount)]);
+  }, [previewParagraphs.length]);
 
   const { handleParagraphCheck } = useShiftSelect();
 
@@ -140,15 +166,28 @@ export const PreviewPanel: React.FC = () => {
           <span className="text-xs text-gray-400">{previewParagraphs.length - excludedCount} 段 · 已排除 {excludedCount} 段</span>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto space-y-1">
-        {previewParagraphs.map((para) => (
-          <PreviewParagraph
-            key={para.id}
-            paragraph={para}
-            isChecked={(paragraphCheckedMap.get(para.id) ?? true) !== false}
-            onCheckToggle={handleParagraphCheck}
+      <div className="flex-1 flex min-h-0">
+        <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-1">
+          {previewParagraphs.map((para, idx) => (
+            <PreviewParagraph
+              key={para.id}
+              paragraph={para}
+              index={idx}
+              isChecked={(paragraphCheckedMap.get(para.id) ?? true) !== false}
+              isModified={modifiedParagraphIds.has(para.id)}
+              onCheckToggle={handleParagraphCheck}
+              highlightedLineIndex={highlightedLineIndex}
+            />
+          ))}
+        </div>
+        {/* V3.3 RQ-04: Minimap */}
+        {minimapItems.length > 0 && (
+          <Minimap
+            items={minimapItems}
+            onItemClick={jumpToParagraph}
+            visibleRange={visibleRange}
           />
-        ))}
+        )}
       </div>
       <Tooltip visible={hoveredParagraphId !== null} content={hoveredSourceFiles} position={hoverPosition} />
     </div>

@@ -13,8 +13,12 @@ import type {
   AppMode,
   Snapshot,
   DiffAlignment,
+  MinimapItem,
 } from '../types';
-import { DEFAULT_CLEAN_OPTIONS, DEFAULT_FORMAT_OPTIONS, DEFAULT_V3_2_STATE } from './defaults';
+import { DEFAULT_CLEAN_OPTIONS, DEFAULT_FORMAT_OPTIONS, DEFAULT_V3_2_STATE, DEFAULT_V3_3_STATE } from './defaults';
+
+import { filterLines } from '../utils/novelProcessor';
+import { toSimplified, toTraditional } from '../utils/cjkConv';
 
 // ==========================================
 // 辅助函数
@@ -35,6 +39,20 @@ function detectEncoding(_path: string): string {
   // 前端无法检测编码，统一返回 UTF-8
   // 后端实际检测后通过 FileMeta 返回
   return 'UTF-8';
+}
+
+/** V3.3: 全角→半角字符转换（纯 TS，无依赖） */
+function toHalfWidth(text: string): string {
+  return text.replace(/[\uFF01-\uFF5E]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)
+  ).replace(/\u3000/g, ' '); // 全角空格→半角空格
+}
+
+/** V3.3: 半角→全角字符转换（反向恢复） */
+function toFullWidth(text: string): string {
+  return text.replace(/[\u0021-\u007E]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) + 0xFEE0)
+  ).replace(/ /g, '\u3000'); // 半角空格→全角空格
 }
 
 // ==========================================
@@ -231,6 +249,44 @@ interface AppState {
   diffLeftFileName: string | null;
   diffRightFileName: string | null;
   setDiffResult: (alignment: DiffAlignment[], leftFile: string, rightFile: string) => void;
+
+  // ═══════════════════════════════════════════
+  // V3.3 新增字段 — RQ-05 双向切换
+  // ═══════════════════════════════════════════
+
+  isFullWidthConverted: boolean;
+  isTraditionalConverted: boolean;
+  toggleFullWidth: () => void;
+  toggleTraditional: () => void;
+
+  // ═══════════════════════════════════════════
+  // V3.3 新增字段 — RQ-04 预览条
+  // ═══════════════════════════════════════════
+
+  minimapItems: MinimapItem[];
+  _updateMinimap: () => void;
+
+  // ═══════════════════════════════════════════
+  // V3.3 新增字段 — RQ-06 关键词搜索
+  // ═══════════════════════════════════════════
+
+  keywordSearchIndex: number;
+  highlightedLineIndex: number | null;
+  searchNextKeyword: () => void;
+  deleteAllKeywordMatches: () => void;
+
+  // ═══════════════════════════════════════════
+  // V3.3 新增字段 — RQ-08 段落修改跟踪
+  // ═══════════════════════════════════════════
+
+  modifiedParagraphIds: Set<string>;
+  _markModifiedParagraphs: (before: PreviewParagraph[], after: PreviewParagraph[]) => void;
+
+  // ═══════════════════════════════════════════
+  // V3.3 新增 Actions
+  // ═══════════════════════════════════════════
+
+  jumpToParagraph: (index: number) => void;
 }
 
 // ==========================================
@@ -269,6 +325,9 @@ export const useStore = create<AppState>((set, get) => ({
   // V3.2 新增字段
   ...DEFAULT_V3_2_STATE,
 
+  // V3.3 新增字段
+  ...DEFAULT_V3_3_STATE,
+
   // ═══════════════════════════════════════════
   // V1.0 Actions
   // ═══════════════════════════════════════════
@@ -300,20 +359,56 @@ export const useStore = create<AppState>((set, get) => ({
 
   removeFile: (path) =>
     set((state) => {
+      const removedName = path.split(/[/\\]/).pop() || '';
       const newFileList = state.fileList.filter((f) => f.path !== path);
       const newSortedList = state.sortedFileList.filter((f) => f.path !== path);
-      // BUG-V2.0-001: 文件移除后如果列表为空，同时清除分析结果防止显示过期数据
       const shouldReset = newFileList.length === 0;
+
+      // V3.3 RQ-03: 删除文件后自动刷新重复组
+      let newGroups = state.duplicateGroups;
+      if (!shouldReset && state.duplicateGroups.length > 0) {
+        newGroups = state.duplicateGroups
+          .map((group) => {
+            const newSources = group.sources.filter((s) => s.fileName !== removedName);
+            const uniqueFiles = new Set(newSources.map((s) => s.fileName));
+            return { ...group, sources: newSources, occurrenceCount: uniqueFiles.size };
+          })
+          .filter((g) => g.occurrenceCount > 1);
+      }
+
+      // V3.3.1 BUG-003 修复：同步更新 previewParagraphs
+      let newPreview = state.previewParagraphs;
+      if (!shouldReset && state.previewParagraphs.length > 0) {
+        newPreview = state.previewParagraphs.filter(
+          (p) => p.sourceFiles.some((sf) => sf !== removedName)
+        );
+        if (newPreview.length === 0) {
+          return {
+            fileList: newFileList,
+            sortedFileList: newSortedList,
+            duplicateGroups: [],
+            originalPreview: [],
+            previewParagraphs: [],
+            paragraphCheckedMap: new Map(),
+            status: 'idle',
+            formatSnapshot: null,
+            canRevert: false,
+            modifiedParagraphIds: new Set(),
+          };
+        }
+      }
+
       return {
         fileList: newFileList,
         sortedFileList: newSortedList,
-        duplicateGroups: shouldReset ? [] : state.duplicateGroups,
+        duplicateGroups: shouldReset ? [] : newGroups,
         originalPreview: shouldReset ? [] : state.originalPreview,
-        previewParagraphs: shouldReset ? [] : state.previewParagraphs,
+        previewParagraphs: shouldReset ? [] : newPreview,
         paragraphCheckedMap: shouldReset ? new Map() : state.paragraphCheckedMap,
         status: shouldReset ? 'idle' : state.status,
         formatSnapshot: shouldReset ? null : state.formatSnapshot,
         canRevert: shouldReset ? false : state.canRevert,
+        modifiedParagraphIds: new Set<string>(),
       };
     }),
 
@@ -377,6 +472,7 @@ export const useStore = create<AppState>((set, get) => ({
       formatOptions: { ...DEFAULT_FORMAT_OPTIONS },
       chapterList: [],
       ...DEFAULT_V3_2_STATE,
+      ...DEFAULT_V3_3_STATE,
     }),
 
   // ═══════════════════════════════════════════
@@ -811,6 +907,166 @@ export const useStore = create<AppState>((set, get) => ({
       diffLeftFileName: leftFile,
       diffRightFileName: rightFile,
     }),
+
+  // ═══════════════════════════════════════════
+  // V3.3 Actions — RQ-05 双向切换
+  // ═══════════════════════════════════════════
+
+  toggleFullWidth: () =>
+    set((state) => {
+      const newConverted = !state.isFullWidthConverted;
+      const checkedParas = state.previewParagraphs.filter(
+        (p) => state.paragraphCheckedMap.get(p.id) !== false
+      );
+      const text = checkedParas.map((p) => p.text).join('\n\n');
+      // 双向切换：使用纯 TS 字符替换（不需要 napi）
+      const resultText = newConverted ? toHalfWidth(text) : toFullWidth(text);
+      const formattedTexts = resultText.split('\n\n');
+      const newParagraphs = state.previewParagraphs.map((p) => {
+        const idx = checkedParas.findIndex((cp) => cp.id === p.id);
+        if (idx >= 0 && idx < formattedTexts.length) return { ...p, text: formattedTexts[idx] };
+        return p;
+      });
+      const modifiedIds = new Set(state.modifiedParagraphIds);
+      newParagraphs.forEach((np) => {
+        const orig = state.previewParagraphs.find((p) => p.id === np.id);
+        if (orig && orig.text !== np.text) modifiedIds.add(np.id);
+      });
+      return {
+        isFullWidthConverted: newConverted,
+        previewParagraphs: newParagraphs,
+        modifiedParagraphIds: modifiedIds,
+      };
+    }),
+
+  toggleTraditional: () =>
+    set((state) => {
+      const newConverted = !state.isTraditionalConverted;
+      const checkedParas = state.previewParagraphs.filter(
+        (p) => state.paragraphCheckedMap.get(p.id) !== false
+      );
+      if (checkedParas.length === 0) return { isTraditionalConverted: newConverted };
+
+      // V3.3.1 BUG-001 修复：实际执行繁简文本转换
+      const text = checkedParas.map((p) => p.text).join('\n\n');
+      const resultText = newConverted ? toSimplified(text) : toTraditional(text);
+      const formattedTexts = resultText.split('\n\n');
+
+      const newParagraphs = state.previewParagraphs.map((p) => {
+        const idx = checkedParas.findIndex((cp) => cp.id === p.id);
+        if (idx >= 0 && idx < formattedTexts.length && p.text !== formattedTexts[idx]) {
+          return { ...p, text: formattedTexts[idx] };
+        }
+        return p;
+      });
+
+      const modifiedIds = new Set(state.modifiedParagraphIds);
+      newParagraphs.forEach((np) => {
+        const orig = state.previewParagraphs.find((p) => p.id === np.id);
+        if (orig && orig.text !== np.text) modifiedIds.add(np.id);
+      });
+
+      state.pushSnapshot(newConverted ? '繁→简' : '简→繁');
+      return {
+        isTraditionalConverted: newConverted,
+        previewParagraphs: newParagraphs,
+        modifiedParagraphIds: modifiedIds,
+      };
+    }),
+
+  // ═══════════════════════════════════════════
+  // V3.3 Actions — RQ-04 预览条
+  // ═══════════════════════════════════════════
+
+  _updateMinimap: () =>
+    set((state) => ({
+      minimapItems: state.previewParagraphs.map((p) => ({
+        color:
+          state.paragraphCheckedMap.get(p.id) === false
+            ? ('red' as const)
+            : state.modifiedParagraphIds.has(p.id)
+              ? ('orange' as const)
+              : ('green' as const),
+        tooltip: p.text.slice(0, 20),
+      })),
+    })),
+
+  // ═══════════════════════════════════════════
+  // V3.3 Actions — RQ-06 关键词搜索
+  // ═══════════════════════════════════════════
+
+  searchNextKeyword: () =>
+    set((state) => {
+      const kws = state.cleanOptions.filterKeywords
+        .split(',').map((k) => k.trim()).filter(Boolean);
+      if (kws.length === 0) return { highlightedLineIndex: null };
+
+      const text = state.previewParagraphs
+        .filter((p) => state.paragraphCheckedMap.get(p.id) !== false)
+        .map((p) => p.text)
+        .join('\n');
+      const lines = text.split('\n');
+
+      let foundIdx: number | null = null;
+      for (let i = state.keywordSearchIndex + 1; i < lines.length; i++) {
+        if (kws.some((kw) => kw && lines[i].includes(kw))) { foundIdx = i; break; }
+      }
+      if (foundIdx === null) {
+        for (let i = 0; i <= state.keywordSearchIndex; i++) {
+          if (kws.some((kw) => kw && lines[i].includes(kw))) { foundIdx = i; break; }
+        }
+      }
+      if (foundIdx === null) return { keywordSearchIndex: 0, highlightedLineIndex: null };
+      return { keywordSearchIndex: foundIdx, highlightedLineIndex: foundIdx };
+    }),
+
+  deleteAllKeywordMatches: () =>
+    set((state) => {
+      const kws = state.cleanOptions.filterKeywords
+        .split(',').map((k) => k.trim()).filter(Boolean);
+      if (kws.length === 0) return state;
+      const newParagraphs = state.previewParagraphs.map((p) => {
+        if (state.paragraphCheckedMap.get(p.id) === false) return p;
+        const filtered = filterLines(p.text, kws, 0);
+        if (filtered !== p.text) return { ...p, text: filtered };
+        return p;
+      });
+      const modifiedIds = new Set(state.modifiedParagraphIds);
+      newParagraphs.forEach((np) => {
+        const orig = state.previewParagraphs.find((p) => p.id === np.id);
+        if (orig && orig.text !== np.text) modifiedIds.add(np.id);
+      });
+      state.pushSnapshot('关键词删除');
+      return {
+        previewParagraphs: newParagraphs,
+        keywordSearchIndex: 0,
+        highlightedLineIndex: null,
+        modifiedParagraphIds: modifiedIds,
+      };
+    }),
+
+  // ═══════════════════════════════════════════
+  // V3.3 Actions — RQ-08 段落修改跟踪
+  // ═══════════════════════════════════════════
+
+  _markModifiedParagraphs: (before, after) =>
+    set((state) => {
+      const modifiedIds = new Set(state.modifiedParagraphIds);
+      after.forEach((np) => {
+        const orig = before.find((p) => p.id === np.id);
+        if (orig && orig.text !== np.text) modifiedIds.add(np.id);
+      });
+      return { modifiedParagraphIds: modifiedIds };
+    }),
+
+  // ═══════════════════════════════════════════
+  // V3.3 Actions — Misc
+  // ═══════════════════════════════════════════
+
+  jumpToParagraph: (index: number) => {
+    const el = document.querySelector(`[data-para-index="${index}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  },
 }));
 
 // ==========================================

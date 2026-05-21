@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -31,7 +31,6 @@ export const FileChipBar: React.FC<FileChipBarProps> = ({ onFilesSelected }) => 
   const triggerReanalysis = useStore((s) => s.triggerReanalysis);
   const removeFile = useStore((s) => s.removeFile);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isHover, setIsHover] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 12 } }), // BUG-V3.2-004: 12px 防止误触
@@ -74,19 +73,13 @@ export const FileChipBar: React.FC<FileChipBarProps> = ({ onFilesSelected }) => 
       </DndContext>
       <button
         onClick={() => fileInputRef.current?.click()}
-        onMouseEnter={() => setIsHover(true)}
-        onMouseLeave={() => setIsHover(false)}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-dashed transition-all ${
-          isHover
-            ? 'border-blue-400 bg-blue-50 text-blue-600'
-            : 'border-gray-300 text-gray-500 hover:border-gray-400'
-        }`}
+        className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-xs font-medium border border-dashed border-gray-300 text-gray-400 hover:text-blue-500 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0"
+        title="添加 .txt 文件"
         aria-label="添加 .txt 文件"
       >
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
-        添加 .txt 文件
       </button>
       <input
         ref={fileInputRef}

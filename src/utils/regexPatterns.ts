@@ -26,6 +26,3 @@ export const SENTENCE_END = /[。！？」）〗》』"']$/;
 
 // 列表标记
 export const LIST_MARKERS = /^[-*•·]|^\d+[.、]|^[①②③④⑤⑥⑦⑧⑨⑩]/;
-
-// 行尾数字（页码）
-export const LINE_END_NUMBERS = /\d{2,}$/;

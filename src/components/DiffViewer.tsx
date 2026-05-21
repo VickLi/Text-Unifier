@@ -71,33 +71,40 @@ export const DiffViewer: React.FC = () => {
   const stats = {
     matched: diffAlignment.filter((a) => a.type === 'match').length,
     leftOnly: diffAlignment.filter((a) => a.type === 'leftOnly').length,
+    bothOnly: diffAlignment.filter((a) => a.type === 'bothOnly').length,
     rightOnly: diffAlignment.filter((a) => a.type === 'rightOnly').length,
     diffCount: diffAlignment.filter((a) => a.type === 'diff').length,
   };
 
+  // OPT-V3.3-001: 仅保留一处提示
   if (fileList.length !== 2) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-400">
-        <p className="text-sm">对比模式需要恰好 2 个文件</p>
+        <div className="text-center">
+          <p className="text-sm mb-1">对比模式需要恰好 2 个文件</p>
+          <p className="text-xs">请在合并去重模式中导入 2 个 TXT 文件后切换</p>
+        </div>
       </div>
     );
   }
 
-  // 每个面板独立着色：只为自己有内容的行着色，对方独有的行显示空白
+  // V3.3.1 BUG-004 修复：空置侧保留等宽边框，确保左右行高一致
   const leftColor = (type: string) => {
     switch (type) {
       case 'match': return 'bg-green-50 border-l-4 border-green-400';
       case 'leftOnly': return 'bg-red-50 border-l-4 border-red-400';
+      case 'bothOnly': return 'bg-red-50 border-l-4 border-red-400';
       case 'diff': return 'bg-gray-100 border-l-4 border-gray-400';
-      default: return ''; // rightOnly → 左栏空白
+      default: return 'border-l-4 border-transparent'; // rightOnly → 左栏透明占位
     }
   };
   const rightColor = (type: string) => {
     switch (type) {
       case 'match': return 'bg-green-50 border-l-4 border-green-400';
       case 'rightOnly': return 'bg-blue-50 border-l-4 border-blue-400';
+      case 'bothOnly': return 'bg-blue-50 border-l-4 border-blue-400';
       case 'diff': return 'bg-gray-100 border-l-4 border-gray-400';
-      default: return ''; // leftOnly → 右栏空白
+      default: return 'border-l-4 border-transparent'; // leftOnly → 右栏透明占位
     }
   };
 
@@ -140,6 +147,7 @@ export const DiffViewer: React.FC = () => {
         <span>✅ 相同 <strong className="text-gray-700">{stats.matched}</strong></span>
         <span>🔴 左独有 <strong className="text-red-600">{stats.leftOnly}</strong></span>
         <span>🔵 右独有 <strong className="text-blue-600">{stats.rightOnly}</strong></span>
+        <span>🟣 交错 <strong className="text-purple-600">{stats.bothOnly}</strong></span>
         <span>⚪ 差异 <strong className="text-gray-600">{stats.diffCount}</strong></span>
       </div>
     </div>

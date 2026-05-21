@@ -60,6 +60,7 @@ export const DuplicateItem: React.FC<DuplicateItemProps> = React.memo(
               className={`text-sm leading-relaxed line-clamp-2 ${
                 isExcluded ? 'text-gray-400 line-through' : 'text-gray-800'
               }`}
+              title={group.snippet}
             >
               {group.snippet}
             </p>
