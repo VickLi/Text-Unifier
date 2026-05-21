@@ -1,0 +1,5 @@
+Only in B paragraph.
+
+Common paragraph across all files.
+
+Another B-specific paragraph.

@@ -1,0 +1,5 @@
+Only in C paragraph.
+
+Common paragraph across all files.
+
+Another C-specific paragraph.
