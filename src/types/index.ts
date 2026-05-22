@@ -78,31 +78,10 @@ export type AppStatus = 'idle' | 'loading' | 'ready' | 'error';
 /** 繁简转换模式 */
 export type ConversionMode = 'none' | 't2s' | 's2t';
 
-/** 内容清洗选项（Phase 1） */
+/** 内容清洗选项（V4.0 精简版：仅保留繁简 + 全半角转换） */
 export interface CleanOptions {
   conversionMode: ConversionMode;
   toHalfWidth: boolean;
-  stripArtifacts: boolean;
-  // removeLineEndNumbers 已在 V3.3 RQ-07 中移除
-  filterKeywords: string;
-  filterMaxLength: number;
-}
-
-/** 排版增强选项（Phase 4） */
-export interface FormatOptions {
-  enableChapterFormat: boolean;
-  enableSmartLineBreak: boolean;
-  enableIndent: boolean;
-  removeAdjacentDup: boolean;
-  enableParagraphSplit: boolean;
-}
-
-/** 章节信息 */
-export interface ChapterInfo {
-  title: string;
-  order: number | null;
-  startIndex: number;
-  paragraphCount: number;
 }
 
 // ═══════════════════════════════════════════

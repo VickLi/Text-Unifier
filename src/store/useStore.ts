@@ -8,16 +8,13 @@ import type {
   SelectAllState,
   TriState,
   CleanOptions,
-  FormatOptions,
-  ChapterInfo,
   AppMode,
   Snapshot,
   DiffAlignment,
   MinimapItem,
 } from '../types';
-import { DEFAULT_CLEAN_OPTIONS, DEFAULT_FORMAT_OPTIONS, DEFAULT_V3_2_STATE, DEFAULT_V3_3_STATE } from './defaults';
+import { DEFAULT_CLEAN_OPTIONS, DEFAULT_V3_2_STATE, DEFAULT_V3_3_STATE } from './defaults';
 
-import { filterLines } from '../utils/novelProcessor';
 import { toSimplified, toTraditional } from '../utils/cjkConv';
 
 // ==========================================
@@ -106,19 +103,6 @@ interface AppState {
   lastClickedParagraphId: string | null;
 
   // ═══════════════════════════════════════════
-  // V2.0 新增字段 — RQ-03 文档排版
-  // ═══════════════════════════════════════════
-
-  /** 排版前快照（用于还原） */
-  formatSnapshot: PreviewParagraph[] | null;
-
-  /** 是否正在执行处理 */
-  isFormatting: boolean;
-
-  /** 是否有可还原的快照 */
-  canRevert: boolean;
-
-  // ═══════════════════════════════════════════
   // V1.0 Actions
   // ═══════════════════════════════════════════
 
@@ -176,37 +160,11 @@ interface AppState {
   setLastClickedParagraphId: (id: string | null) => void;
 
   // ═══════════════════════════════════════════
-  // V2.0 新增 Actions — RQ-03
-  // ═══════════════════════════════════════════
-
-  /** 还原至排版前状态 */
-  revertFormatting: () => void;
-
-  // ═══════════════════════════════════════════
   // V2.0.1 新增 Actions — BUG-026
   // ═══════════════════════════════════════════
 
   /** 触发文件重新分析（拖拽排序后调用，BUG-026 修复） */
   triggerReanalysis: () => Promise<void>;
-
-  // ═══════════════════════════════════════════
-  // V3.1 新增 Actions — 内容清洗与排版增强
-
-  // ═══════════════════════════════════════════
-
-  cleanOptions: CleanOptions;
-  formatOptions: FormatOptions;
-  chapterList: ChapterInfo[];
-
-  setCleanOptions: (opts: Partial<CleanOptions>) => void;
-  setFormatOptions: (opts: Partial<FormatOptions>) => void;
-
-  /** 执行全处理流水线（替代旧 formatDocument） */
-  applyProcessing: () => Promise<void>;
-  /** 仅执行章节分割 */
-  splitChapters: () => Promise<void>;
-  /** 仅执行章节重排 */
-  reorderChapters: () => Promise<void>;
 
   // ═══════════════════════════════════════════
   // V3.2 新增字段 — 模式切换
@@ -267,15 +225,6 @@ interface AppState {
   _updateMinimap: () => void;
 
   // ═══════════════════════════════════════════
-  // V3.3 新增字段 — RQ-06 关键词搜索
-  // ═══════════════════════════════════════════
-
-  keywordSearchIndex: number;
-  highlightedLineIndex: number | null;
-  searchNextKeyword: () => void;
-  deleteAllKeywordMatches: () => void;
-
-  // ═══════════════════════════════════════════
   // V3.3 新增字段 — RQ-08 段落修改跟踪
   // ═══════════════════════════════════════════
 
@@ -313,14 +262,6 @@ export const useStore = create<AppState>((set, get) => ({
   previewParagraphs: [],
   paragraphCheckedMap: new Map<string, boolean>(),
   lastClickedParagraphId: null,
-  formatSnapshot: null,
-  isFormatting: false,
-  canRevert: false,
-
-  // V3.1 新增字段
-  cleanOptions: { ...DEFAULT_CLEAN_OPTIONS },
-  formatOptions: { ...DEFAULT_FORMAT_OPTIONS },
-  chapterList: [],
 
   // V3.2 新增字段
   ...DEFAULT_V3_2_STATE,
@@ -391,8 +332,6 @@ export const useStore = create<AppState>((set, get) => ({
             previewParagraphs: [],
             paragraphCheckedMap: new Map(),
             status: 'idle',
-            formatSnapshot: null,
-            canRevert: false,
             modifiedParagraphIds: new Set(),
           };
         }
@@ -406,8 +345,6 @@ export const useStore = create<AppState>((set, get) => ({
         previewParagraphs: shouldReset ? [] : newPreview,
         paragraphCheckedMap: shouldReset ? new Map() : state.paragraphCheckedMap,
         status: shouldReset ? 'idle' : state.status,
-        formatSnapshot: shouldReset ? null : state.formatSnapshot,
-        canRevert: shouldReset ? false : state.canRevert,
         modifiedParagraphIds: new Set<string>(),
       };
     }),
@@ -435,8 +372,6 @@ export const useStore = create<AppState>((set, get) => ({
         originalPreview: previewParagraphs,
         previewParagraphs,
         paragraphCheckedMap: newCheckedMap,
-        formatSnapshot: null,
-        canRevert: false,
         lastClickedParagraphId: null,
         status: 'ready',
         errorMessage: null,
@@ -460,17 +395,11 @@ export const useStore = create<AppState>((set, get) => ({
       originalPreview: [],
       previewParagraphs: [],
       paragraphCheckedMap: new Map<string, boolean>(),
-      formatSnapshot: null,
-      canRevert: false,
-      isFormatting: false,
       lastClickedParagraphId: null,
       hoveredParagraphId: null,
       hoveredSourceFiles: [],
       hoverPosition: null,
       activeDragFileId: null,
-      cleanOptions: { ...DEFAULT_CLEAN_OPTIONS },
-      formatOptions: { ...DEFAULT_FORMAT_OPTIONS },
-      chapterList: [],
       ...DEFAULT_V3_2_STATE,
       ...DEFAULT_V3_3_STATE,
     }),
@@ -610,8 +539,6 @@ export const useStore = create<AppState>((set, get) => ({
           originalPreview: report.previewParagraphs,
           previewParagraphs: report.previewParagraphs,
           paragraphCheckedMap: newCheckedMap,
-          formatSnapshot: null,
-          canRevert: false,
           status: 'ready',
         };
       });
@@ -619,219 +546,6 @@ export const useStore = create<AppState>((set, get) => ({
       set({ status: 'error', errorMessage: `重新分析失败: ${error}` });
     }
   },
-  // ═══════════════════════════════════════════
-
-  revertFormatting: () =>
-    set((state) => {
-      if (!state.formatSnapshot) return state;
-      // BUG-025: 基于快照重建 Map，完全丢弃 fmt_* 残留
-      const restoredCheckedMap = new Map<string, boolean>();
-      for (const p of state.formatSnapshot) {
-        // 从当前 paragraphCheckedMap 中查找该段落的勾选状态
-        const currentState = state.paragraphCheckedMap.get(p.id);
-        // 如果在当前 map 中存在，保留；否则默认 true
-        restoredCheckedMap.set(p.id, currentState ?? true);
-      }
-      return {
-        previewParagraphs: state.formatSnapshot,
-        formatSnapshot: null,
-        canRevert: false,
-        paragraphCheckedMap: restoredCheckedMap,
-      };
-    }),
-
-  // ═══════════════════════════════════════════
-  // V3.1 Actions — 内容清洗与排版增强
-  // ═══════════════════════════════════════════
-
-  setCleanOptions: (opts) =>
-    set((state) => ({
-      cleanOptions: { ...state.cleanOptions, ...opts },
-    })),
-
-  setFormatOptions: (opts) =>
-    set((state) => ({
-      formatOptions: { ...state.formatOptions, ...opts },
-    })),
-
-  applyProcessing: async () => {
-    const state = get();
-    if (state.isFormatting) return;
-
-    const snapshot = state.previewParagraphs.map((p) => ({ ...p }));
-    set({ formatSnapshot: snapshot, isFormatting: true, canRevert: false });
-
-    try {
-      const { mergeLinesSmart, formatChapterTitles, removeAdjacentDuplicateLines, addParagraphIndent, splitCNParagraph, filterLines } = await import('../utils/novelProcessor');
-
-      let processedText = state.previewParagraphs
-        .filter((p) => (state.paragraphCheckedMap.get(p.id) ?? true) !== false)
-        .map((p) => p.text)
-        .join('\n\n');
-
-      const co = state.cleanOptions;
-      const fo = state.formatOptions;
-
-      // 内容筛选
-      if (co.filterKeywords) {
-        const keywords = co.filterKeywords.split(',').map((k) => k.trim()).filter(Boolean);
-        if (keywords.length > 0) {
-          processedText = filterLines(processedText, keywords, co.filterMaxLength);
-        }
-      }
-
-      // 章节格式化
-      if (fo.enableChapterFormat) {
-        processedText = formatChapterTitles(processedText);
-      }
-
-      // 智能换行
-      if (fo.enableSmartLineBreak) {
-        processedText = mergeLinesSmart(processedText, { preserveChapterTitles: true });
-      }
-
-      // 相邻行去重
-      if (fo.removeAdjacentDup) {
-        const lines = processedText.split('\n');
-        processedText = removeAdjacentDuplicateLines(lines).join('\n');
-      }
-
-      // 段落缩进
-      if (fo.enableIndent) {
-        processedText = addParagraphIndent(processedText);
-      }
-
-      // 长段落拆分
-      if (fo.enableParagraphSplit) {
-        processedText = splitCNParagraph(processedText);
-      }
-
-      // 重建段落列表
-      // BUG-V3.1-002: 处理段落数变化（合并减少/拆分增加）
-      const formattedTexts = processedText.split('\n\n').filter((t) => t.trim());
-      const newParagraphs: PreviewParagraph[] = [];
-      let fmtIdx = 0;
-      const checkedIds: string[] = [];
-
-      for (const originalPara of state.previewParagraphs) {
-        const isChecked = (state.paragraphCheckedMap.get(originalPara.id) ?? true) !== false;
-        if (isChecked) {
-          checkedIds.push(originalPara.id);
-          if (fmtIdx < formattedTexts.length) {
-            const hash = await computeContentHash(formattedTexts[fmtIdx]);
-            newParagraphs.push({ ...originalPara, text: formattedTexts[fmtIdx], contentHash: hash });
-            fmtIdx++;
-          } else {
-            // 合并导致段落数减少：保留原文
-            newParagraphs.push({ ...originalPara });
-          }
-        } else {
-          newParagraphs.push({ ...originalPara });
-        }
-      }
-
-      while (fmtIdx < formattedTexts.length) {
-        const t = formattedTexts[fmtIdx];
-        if (t.trim()) {
-          const hash = await computeContentHash(t);
-          newParagraphs.push({ id: `fmt_${fmtIdx}`, text: t, contentHash: hash, sourceFiles: [], isOriginal: false });
-        }
-        fmtIdx++;
-      }
-
-      const rebuiltMap = new Map<string, boolean>();
-      for (const p of newParagraphs) {
-        rebuiltMap.set(p.id, state.paragraphCheckedMap.get(p.id) ?? true);
-      }
-
-      // BUG-V3.1-003: 立即基于最新数据更新章节列表
-      const chapterList: ChapterInfo[] = [];
-      const allText = newParagraphs
-        .filter((p) => (rebuiltMap.get(p.id) ?? true) !== false)
-        .map((p) => p.text)
-        .join('\n');
-      const chapterLines = allText.split('\n');
-      for (let i = 0; i < chapterLines.length; i++) {
-        const line = chapterLines[i].trim();
-        if (/^第[〇零一二三四五六七八九十百千万\d]+[章节回卷部]|^Chapter\s+[\dIVXLCDM]+/i.test(line)) {
-          let order: number | null = null;
-          const arMatch = line.match(/^第(\d+)\s*[章节回卷部]/);
-          if (arMatch) order = parseInt(arMatch[1], 10);
-          else {
-            const enMatch = line.match(/^Chapter\s+(\d+)/i);
-            if (enMatch) order = parseInt(enMatch[1], 10);
-          }
-          chapterList.push({ title: line, order, startIndex: i, paragraphCount: 0 });
-        }
-      }
-
-      set({
-        previewParagraphs: newParagraphs,
-        paragraphCheckedMap: rebuiltMap,
-        isFormatting: false,
-        canRevert: true,
-        chapterList,
-      });
-    } catch (error) {
-      set({ isFormatting: false, errorMessage: `处理失败: ${error}` });
-    }
-  },
-
-  // BUG-V3.1.2-003: 使用动态 import 替代 require（ESM 兼容）
-  splitChapters: async () => {
-    const state = get();
-    const checkedParas = state.previewParagraphs.filter(
-      (p) => (state.paragraphCheckedMap.get(p.id) ?? true) !== false
-    );
-    const text = checkedParas.map((p) => p.text).join('\n\n');
-    const { splitInlineChapterTitles } = await import('../utils/novelProcessor');
-    const result = splitInlineChapterTitles(text);
-
-    const newTexts = result.split('\n\n').filter((t: string) => t.trim());
-    const newParagraphs: PreviewParagraph[] = [];
-    let idx = 0;
-    for (const originalPara of state.previewParagraphs) {
-      const isChecked = (state.paragraphCheckedMap.get(originalPara.id) ?? true) !== false;
-      if (isChecked && idx < newTexts.length) {
-        newParagraphs.push({ ...originalPara, text: newTexts[idx] });
-        idx++;
-      } else {
-        newParagraphs.push({ ...originalPara });
-      }
-    }
-    set({ previewParagraphs: newParagraphs, canRevert: true });
-  },
-
-  // BUG-V3.1.2-003: 使用动态 import 替代 require（ESM 兼容）
-  reorderChapters: async () => {
-    const state = get();
-    const checkedParas = state.previewParagraphs.filter(
-      (p) => (state.paragraphCheckedMap.get(p.id) ?? true) !== false
-    );
-    const text = checkedParas.map((p) => p.text).join('\n\n');
-
-    try {
-      const { reorderChaptersByTitle } = await import('../utils/novelProcessor');
-      const reordered = reorderChaptersByTitle(text);
-
-      const newTexts = reordered.split('\n\n').filter((t: string) => t.trim());
-      const newParagraphs: PreviewParagraph[] = [];
-      let idx = 0;
-      for (const originalPara of state.previewParagraphs) {
-        const isChecked = (state.paragraphCheckedMap.get(originalPara.id) ?? true) !== false;
-        if (isChecked && idx < newTexts.length) {
-          newParagraphs.push({ ...originalPara, text: newTexts[idx] });
-          idx++;
-        } else {
-          newParagraphs.push({ ...originalPara });
-        }
-      }
-      set({ previewParagraphs: newParagraphs, canRevert: true });
-    } catch {
-      set({ errorMessage: '章节重排失败: 未识别到有效章节标题' });
-    }
-  },
-
   // ═══════════════════════════════════════════
   // V3.2 Actions
   // ═══════════════════════════════════════════
@@ -990,60 +704,6 @@ export const useStore = create<AppState>((set, get) => ({
         tooltip: p.text.slice(0, 20),
       })),
     })),
-
-  // ═══════════════════════════════════════════
-  // V3.3 Actions — RQ-06 关键词搜索
-  // ═══════════════════════════════════════════
-
-  searchNextKeyword: () =>
-    set((state) => {
-      const kws = state.cleanOptions.filterKeywords
-        .split(',').map((k) => k.trim()).filter(Boolean);
-      if (kws.length === 0) return { highlightedLineIndex: null };
-
-      const text = state.previewParagraphs
-        .filter((p) => state.paragraphCheckedMap.get(p.id) !== false)
-        .map((p) => p.text)
-        .join('\n');
-      const lines = text.split('\n');
-
-      let foundIdx: number | null = null;
-      for (let i = state.keywordSearchIndex + 1; i < lines.length; i++) {
-        if (kws.some((kw) => kw && lines[i].includes(kw))) { foundIdx = i; break; }
-      }
-      if (foundIdx === null) {
-        for (let i = 0; i <= state.keywordSearchIndex; i++) {
-          if (kws.some((kw) => kw && lines[i].includes(kw))) { foundIdx = i; break; }
-        }
-      }
-      if (foundIdx === null) return { keywordSearchIndex: 0, highlightedLineIndex: null };
-      return { keywordSearchIndex: foundIdx, highlightedLineIndex: foundIdx };
-    }),
-
-  deleteAllKeywordMatches: () =>
-    set((state) => {
-      const kws = state.cleanOptions.filterKeywords
-        .split(',').map((k) => k.trim()).filter(Boolean);
-      if (kws.length === 0) return state;
-      const newParagraphs = state.previewParagraphs.map((p) => {
-        if (state.paragraphCheckedMap.get(p.id) === false) return p;
-        const filtered = filterLines(p.text, kws, 0);
-        if (filtered !== p.text) return { ...p, text: filtered };
-        return p;
-      });
-      const modifiedIds = new Set(state.modifiedParagraphIds);
-      newParagraphs.forEach((np) => {
-        const orig = state.previewParagraphs.find((p) => p.id === np.id);
-        if (orig && orig.text !== np.text) modifiedIds.add(np.id);
-      });
-      state.pushSnapshot('关键词删除');
-      return {
-        previewParagraphs: newParagraphs,
-        keywordSearchIndex: 0,
-        highlightedLineIndex: null,
-        modifiedParagraphIds: modifiedIds,
-      };
-    }),
 
   // ═══════════════════════════════════════════
   // V3.3 Actions — RQ-08 段落修改跟踪

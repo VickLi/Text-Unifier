@@ -13,12 +13,10 @@ interface PreviewParagraphProps {
   isModified: boolean;
   /** 切换勾选回调 */
   onCheckToggle: (paragraphId: string, shiftKey: boolean) => void;
-  /** 搜索高亮行号（V3.3 RQ-06） */
-  highlightedLineIndex?: number | null;
 }
 
 /**
- * V3.3 预览段落组件
+ * V3.3 预览段落组件（V4.0：移除关键词搜索高亮）
  *
  * V3.3 增强：
  *  - ParagraphIndicator 彩色指示器（绿/红/橙 3px 竖线）
@@ -27,7 +25,7 @@ interface PreviewParagraphProps {
  *  - data-para-index 属性（Minimap 跳转用）
  */
 export const PreviewParagraph: React.FC<PreviewParagraphProps> = React.memo(
-  ({ paragraph, index, isChecked, isModified, onCheckToggle, highlightedLineIndex }) => {
+  ({ paragraph, index, isChecked, isModified, onCheckToggle }) => {
     const setHoveredParagraph = useStore((s) => s.setHoveredParagraph);
     const hoveredParagraphId = useStore((s) => s.hoveredParagraphId);
     const rafRef = useRef<number | null>(null);
@@ -120,9 +118,7 @@ export const PreviewParagraph: React.FC<PreviewParagraphProps> = React.memo(
           <p className={`text-sm leading-relaxed whitespace-pre-wrap break-words
             ${isDeleted
               ? 'text-gray-400 line-through opacity-50'
-              : highlightedLineIndex !== null
-                ? 'bg-yellow-200'
-                : 'text-gray-800'
+              : 'text-gray-800'
             }`}>
             {paragraph.text}
           </p>

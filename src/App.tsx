@@ -7,7 +7,7 @@ import { ModeTabs } from './components/ModeTabs';
 import { DuplicateList } from './components/DuplicateList';
 import { PreviewPanel } from './components/PreviewPanel';
 import { ExportButton } from './components/ExportButton';
-import { SidePanel } from './components/SidePanel';
+import { CleanPanel } from './components/CleanPanel';
 import { DiffViewer } from './components/DiffViewer';
 
 const SCAN_TIMEOUT_MS = 60000;
@@ -79,7 +79,7 @@ const App: React.FC = () => {
             文档终版确定器
           </h1>
           <span className="text-xs text-white bg-blue-500 px-2 py-0.5 rounded">
-            Text Unifier v3.3
+            Text Unifier v4.0
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -137,8 +137,12 @@ const App: React.FC = () => {
             <PreviewPanel />
           </section>
 
-          {/* 右侧工具面板 */}
-          {status === 'ready' && <SidePanel />}
+          {/* 右侧：内容清洗面板（V4.0 精简版） */}
+          {status === 'ready' && (
+            <section className="w-[260px] shrink-0 bg-white border border-gray-200 rounded-xl p-4 overflow-y-auto" aria-label="内容清洗">
+              <CleanPanel />
+            </section>
+          )}
         </main>
       ) : (
         /* V3.2 文档对比模式 */

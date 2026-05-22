@@ -5,10 +5,9 @@ import { PreviewParagraph } from './PreviewParagraph';
 import { Tooltip } from './Tooltip';
 import { Minimap } from './Minimap';
 import { useShiftSelect } from '../hooks/useShiftSelect';
-import { useHighlightTimeout } from '../hooks/useHighlightTimeout';
 
 /**
- * 预览面板组件（V3.2 增强版：可编辑 + 撤回栈）
+ * 预览面板组件（V4.0：移除关键词搜索高亮）
  */
 export const PreviewPanel: React.FC = () => {
   const previewParagraphs = useStore((s) => s.previewParagraphs);
@@ -28,15 +27,11 @@ export const PreviewPanel: React.FC = () => {
   // V3.3 新增字段
   const minimapItems = useStore((s) => s.minimapItems);
   const modifiedParagraphIds = useStore((s) => s.modifiedParagraphIds);
-  const highlightedLineIndex = useStore((s) => s.highlightedLineIndex);
   const jumpToParagraph = useStore((s) => s.jumpToParagraph);
   const _updateMinimap = useStore((s) => s._updateMinimap);
 
   // V3.3: Minimap 数据在段落变化时更新
   useEffect(() => { _updateMinimap(); }, [previewParagraphs, paragraphCheckedMap, modifiedParagraphIds, _updateMinimap]);
-
-  // V3.3: 搜索高亮消退
-  useHighlightTimeout(highlightedLineIndex, () => useStore.setState({ highlightedLineIndex: null }));
 
   // V3.3.1 BUG-002 修复：预览区滚动联动 Minimap 可视范围
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -176,7 +171,6 @@ export const PreviewPanel: React.FC = () => {
               isChecked={(paragraphCheckedMap.get(para.id) ?? true) !== false}
               isModified={modifiedParagraphIds.has(para.id)}
               onCheckToggle={handleParagraphCheck}
-              highlightedLineIndex={highlightedLineIndex}
             />
           ))}
         </div>

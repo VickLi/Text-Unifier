@@ -1,23 +1,14 @@
-import type { CleanOptions, FormatOptions, ConversionMode } from '../types';
+import type { CleanOptions, ConversionMode } from '../types';
 
+/**
+ * V4.0 精简版默认清洗选项（仅保留繁简 + 全半角转换）
+ */
 export const DEFAULT_CLEAN_OPTIONS: CleanOptions = {
   conversionMode: 'none' as ConversionMode,
   toHalfWidth: false,
-  stripArtifacts: true,
-  // removeLineEndNumbers 已在 V3.3 RQ-07 中移除
-  filterKeywords: '',
-  filterMaxLength: 0,
 };
 
-export const DEFAULT_FORMAT_OPTIONS: FormatOptions = {
-  enableChapterFormat: true,
-  enableSmartLineBreak: true,
-  enableIndent: true,
-  removeAdjacentDup: true,
-  enableParagraphSplit: false,
-};
-
-// V3.2 新增默认值
+// V3.2 新增默认值（V4.0 保留）
 export const DEFAULT_V3_2_STATE = {
   activeMode: 'merge' as const,
   isEditing: false,
@@ -30,12 +21,10 @@ export const DEFAULT_V3_2_STATE = {
   diffRightFileName: null as string | null,
 };
 
-// V3.3 新增默认值
+// V3.3 新增默认值（V4.0 精简：移除关键词搜索字段）
 export const DEFAULT_V3_3_STATE = {
   isFullWidthConverted: false,
   isTraditionalConverted: false,
   minimapItems: [] as { color: 'green' | 'red' | 'orange'; tooltip: string }[],
-  keywordSearchIndex: 0,
-  highlightedLineIndex: null as number | null,
   modifiedParagraphIds: new Set<string>(),
 };
