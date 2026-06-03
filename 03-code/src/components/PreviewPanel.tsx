@@ -29,7 +29,6 @@ export const PreviewPanel: React.FC = () => {
   const minimapItems = useStore((s) => s.minimapItems);
   const updateMinimap = useStore((s) => s.updateMinimap);
   const scrollToRatio = useStore((s) => s.scrollToRatio);
-  const featureFlags = useStore((s) => s.featureFlags);
   const fileContents = useStore((s) => s.fileContents);
   const connectionPoints = useStore((s) => s.connectionPoints);
   const connectionStatesStore = useStore((s) => s.connectionStates);
@@ -65,25 +64,22 @@ export const PreviewPanel: React.FC = () => {
     updateMinimap();
   }, [mergedText, updateMinimap]);
 
-  // 键盘快捷键（Ctrl+Z/Y 受 undoRedo flag 控制，Ctrl+S 受 exportFeature flag 控制）
+  // 键盘快捷键（Ctrl+Z/Y 撤回/重做，Ctrl+S 导出）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        if (!featureFlags.undoRedo) return;
         e.preventDefault(); undo();
       }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        if (!featureFlags.undoRedo) return;
         e.preventDefault(); redo();
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        if (!featureFlags.exportFeature) return;
         e.preventDefault(); exportMergedText();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, exportMergedText, featureFlags.undoRedo, featureFlags.exportFeature]);
+  }, [undo, redo, exportMergedText]);
 
   const canUndo = undoPointer > 0;
   const canRedo = undoPointer < undoStack.length - 1;
@@ -270,15 +266,11 @@ export const PreviewPanel: React.FC = () => {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {featureFlags.undoRedo && (
-            <>
-              <button onClick={undo} disabled={!canUndo}
-                className={`text-xs px-2 py-0.5 rounded ${canUndo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}>↶ 撤回</button>
-              <button onClick={redo} disabled={!canRedo}
-                className={`text-xs px-2 py-0.5 rounded ${canRedo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}>↷ 重做</button>
-              {undoStack.length > 0 && <span className="text-xs text-gray-400">{undoPointer + 1}/{undoStack.length}</span>}
-            </>
-          )}
+          <button onClick={undo} disabled={!canUndo}
+            className={`text-xs px-2 py-0.5 rounded ${canUndo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}>↶ 撤回</button>
+          <button onClick={redo} disabled={!canRedo}
+            className={`text-xs px-2 py-0.5 rounded ${canRedo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}>↷ 重做</button>
+          {undoStack.length > 0 && <span className="text-xs text-gray-400">{undoPointer + 1}/{undoStack.length}</span>}
           <span className="text-xs text-gray-400">{lineCount} 行 · {charCount.toLocaleString()} 字符</span>
         </div>
       </div>

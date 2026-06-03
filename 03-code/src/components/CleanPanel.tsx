@@ -20,8 +20,6 @@ export const CleanPanel: React.FC = () => {
   const toggleTraditional = useStore((s) => s.toggleTraditional);
   const pushSnapshot = useStore((s) => s.pushSnapshot);
   const mergedText = useStore((s) => s.mergedText);
-  const featureFlags = useStore((s) => s.featureFlags);
-
   const hasContent = !!mergedText;
 
   const handleFullWidthToggle = useCallback(() => {
@@ -33,57 +31,38 @@ export const CleanPanel: React.FC = () => {
     await toggleTraditional();
   }, [toggleTraditional]);
 
-  // 当两个子功能都未启用时显示占位
-  if (!featureFlags.cleaning && !featureFlags.searchReplace) {
-    return (
-      <div className="space-y-4">
-        <h4 className="text-sm font-medium text-gray-700">内容清洗</h4>
-        <div className="text-center py-6 text-gray-400">
-          <p className="text-xs">清洗功能未启用</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
       <h4 className="text-sm font-medium text-gray-700">内容清洗</h4>
 
-      {/* 繁简转换 ToggleButton — cleaning flag */}
-      {featureFlags.cleaning && (
-        <>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">繁简转换</label>
-            <ToggleButton
-              labelForward="繁→简"
-              labelBackward="简→繁"
-              isToggled={isTraditionalConverted}
-              onToggle={handleTraditionalToggle}
-              disabled={!hasContent || isConverting}
-            />
-          </div>
+      {/* 繁简转换 ToggleButton */}
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">繁简转换</label>
+        <ToggleButton
+          labelForward="繁→简"
+          labelBackward="简→繁"
+          isToggled={isTraditionalConverted}
+          onToggle={handleTraditionalToggle}
+          disabled={!hasContent || isConverting}
+        />
+      </div>
 
-          {/* 全角↔半角 ToggleButton */}
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">全角↔半角</label>
-            <ToggleButton
-              labelForward="全角→半角"
-              labelBackward="半角→全角"
-              isToggled={isFullWidthConverted}
-              onToggle={handleFullWidthToggle}
-              disabled={!hasContent}
-            />
-          </div>
-        </>
-      )}
+      {/* 全角↔半角 ToggleButton */}
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">全角↔半角</label>
+        <ToggleButton
+          labelForward="全角→半角"
+          labelBackward="半角→全角"
+          isToggled={isFullWidthConverted}
+          onToggle={handleFullWidthToggle}
+          disabled={!hasContent}
+        />
+      </div>
 
-      {/* 分隔线 */}
-      {featureFlags.cleaning && featureFlags.searchReplace && (
-        <hr className="border-gray-200" />
-      )}
+      <hr className="border-gray-200" />
 
-      {/* V4.0 搜索替换 — searchReplace flag */}
-      {featureFlags.searchReplace && <SearchReplace />}
+      {/* 搜索替换 */}
+      <SearchReplace />
     </div>
   );
 };

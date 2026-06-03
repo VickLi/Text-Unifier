@@ -14,9 +14,8 @@ import type {
   MergeResult,
   SearchResult,
   ToastMessage,
-  FeatureFlags,
 } from '../types';
-import { DEFAULT_V3_2_STATE, DEFAULT_V3_3_STATE, DEFAULT_V4_0_STATE, DEFAULT_FEATURE_FLAGS } from './defaults';
+import { DEFAULT_V3_2_STATE, DEFAULT_V3_3_STATE, DEFAULT_V4_0_STATE } from './defaults';
 
 import { toSimplified, toTraditional } from '../utils/cjkConv';
 
@@ -196,12 +195,6 @@ interface AppState {
   removeToast: (id: string) => void;
 
   // ═══════════════════════════════════════════
-  // V4.0 Feature Flag — 增量集成控制
-  // ═══════════════════════════════════════════
-
-  featureFlags: FeatureFlags;
-
-  // ═══════════════════════════════════════════
   // V1.0 Actions
   // ═══════════════════════════════════════════
 
@@ -301,9 +294,6 @@ export const useStore = create<AppState>((set, get) => ({
 
   // V4.0 新增字段 — 连续文本模型
   ...DEFAULT_V4_0_STATE,
-
-  // V4.0 Feature Flag
-  featureFlags: { ...DEFAULT_FEATURE_FLAGS },
 
   // V4.0 Minimap
   minimapItemCount: 0,
@@ -460,7 +450,6 @@ export const useStore = create<AppState>((set, get) => ({
       ...DEFAULT_V3_2_STATE,
       ...DEFAULT_V3_3_STATE,
       ...DEFAULT_V4_0_STATE,
-      featureFlags: { ...DEFAULT_FEATURE_FLAGS },
       minimapItems: [],
       minimapItemCount: 0,
     }),
@@ -846,11 +835,13 @@ export const useStore = create<AppState>((set, get) => ({
         .filter((line) => !line.trimStart().startsWith('┈┈'))
         .join('\n');
       const defaultName = (state.sortedFileList[0]?.name || 'merged').replace(/\.txt$/i, '') + '_merged.txt';
-      await exportFile(cleanText, defaultName);
-    } catch (error: any) {
-      if (error?.message !== 'EXPORT_CANCELED') {
-        get().showToast(`导出失败: ${error}`, 'error');
+      const result = await exportFile(cleanText, defaultName);
+      if (!result.savedPath) {
+        return; // 用户取消了保存对话框，无提示
       }
+      get().showToast('导出成功！', 'success');
+    } catch (error: any) {
+      get().showToast(`导出失败: ${error}`, 'error');
     }
   },
 

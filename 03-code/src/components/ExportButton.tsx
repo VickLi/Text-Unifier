@@ -27,9 +27,8 @@ export const ExportButton: React.FC = () => {
     setIsExporting(true);
     try {
       await exportMergedText();
-      showToast('success', `导出成功！文件数：${sortedFileList.length}`);
-    } catch (error) {
-      showToast('error', `导出失败: ${error}`);
+    } catch {
+      // 错误由 store.showToast 统一处理
     } finally {
       setIsExporting(false);
     }

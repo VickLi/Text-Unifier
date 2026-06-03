@@ -20,7 +20,6 @@ const App: React.FC = () => {
   const errorMessage = useStore((s) => s.errorMessage);
   const analyzeError = useStore((s) => s.analyzeError);
   const activeMode = useStore((s) => s.activeMode);
-  const featureFlags = useStore((s) => s.featureFlags);
   const mergedText = useStore((s) => s.mergedText);
   const connectionPoints = useStore((s) => s.connectionPoints);
   const connectionStates = useStore((s) => s.connectionStates);
@@ -93,7 +92,7 @@ const App: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           {/* V4.0 合并设置入口 */}
-          {featureFlags.mergeCore && status === 'ready' && (
+          {status === 'ready' && (
             <button
               onClick={() => setShowMergeSettings(true)}
               className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
@@ -102,7 +101,7 @@ const App: React.FC = () => {
               ≡
             </button>
           )}
-          {featureFlags.mergeCore && status === 'ready' && (
+          {status === 'ready' && (
             <button
               onClick={handleReset}
               className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
@@ -111,18 +110,12 @@ const App: React.FC = () => {
               重新开始
             </button>
           )}
-          {featureFlags.exportFeature ? (
-            <ExportButton />
-          ) : (
-            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-400 cursor-not-allowed">
-              导出功能已禁用
-            </span>
-          )}
+          <ExportButton />
         </div>
       </header>
 
-      {/* 模式切换条（V3.2）— 当 mergeCore 或 diffViewer 任一启用时显示 */}
-      {(featureFlags.mergeCore || featureFlags.diffViewer) && <ModeTabs />}
+      {/* 模式切换条 */}
+      <ModeTabs />
 
       {/* 错误提示 */}
       {(errorMessage || analyzeError) && (
@@ -149,8 +142,8 @@ const App: React.FC = () => {
       {/* V3.2 文件标签栏 */}
       <FileChipBar onFilesSelected={handleFilesSelected} />
 
-      {/* 主内容区 — 按 Feature Flag 条件渲染 */}
-      {featureFlags.mergeCore && activeMode === 'merge' && (
+      {/* 主内容区 */}
+      {activeMode === 'merge' && (
         <main className="flex-1 flex gap-0 min-h-0 px-4 pb-3" role="main">
           {/* 左侧：连接点列表 / 搜索结果 */}
           <section className="w-[220px] lg:w-[280px] shrink-0 bg-white border border-gray-200 rounded-xl p-3 overflow-y-auto mr-3" aria-label="连接点列表">
@@ -171,24 +164,14 @@ const App: React.FC = () => {
         </main>
       )}
 
-      {featureFlags.diffViewer && activeMode === 'compare' && (
+      {activeMode === 'compare' && (
         <main className="flex-1 flex min-h-0 px-4 pb-3" role="main">
           <DiffViewer />
         </main>
       )}
 
-      {!featureFlags.mergeCore && !featureFlags.diffViewer && (
-        <main className="flex-1 flex items-center justify-center min-h-0 px-4 pb-3" role="main">
-          <div className="text-center text-gray-400 select-none">
-            <div className="text-5xl mb-4">🚧</div>
-            <p className="text-lg font-medium text-gray-500">功能模块未启用</p>
-            <p className="text-sm mt-1 text-gray-400">等待 Feature Flag 逐步激活…</p>
-          </div>
-        </main>
-      )}
-
       {/* 合并设置弹窗 */}
-      {featureFlags.mergeCore && showMergeSettings && (
+      {showMergeSettings && (
         <MergeSettings onClose={() => setShowMergeSettings(false)} />
       )}
 
@@ -197,7 +180,7 @@ const App: React.FC = () => {
         <span className="text-xs text-gray-400">
           {status === 'idle' && '就绪 — 请添加 .txt 文件开始分析'}
           {status === 'loading' && '正在分析文件中...'}
-          {status === 'ready' && featureFlags.mergeCore && (
+          {status === 'ready' && (
             `总 ${mergedText.length} 字 | 连接点 ${connectionPoints.length} (自动${connectionPoints.filter(cp => connectionStates[cp.id] ?? cp.isAutoMerged).length}/待确认${connectionPoints.filter(cp => !(connectionStates[cp.id] ?? cp.isAutoMerged)).length}) | 预估 ${Math.max(1, Math.round(mergedText.length / 500))} KB`
           )}
           {status === 'ready' && !featureFlags.mergeCore && `分析完成 — ${sortedFileList.length} 个文件`}

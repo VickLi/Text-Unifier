@@ -1,4 +1,4 @@
-import type { CleanOptions, ConversionMode, FeatureFlags } from '../types';
+import type { CleanOptions, ConversionMode } from '../types';
 
 /**
  * V4.0 精简版默认清洗选项（仅保留繁简 + 全半角转换）
@@ -67,12 +67,4 @@ export const DEFAULT_V4_0_STATE = {
   toastMessages: [] as import('../types').ToastMessage[],
 };
 
-// V4.0 Feature Flag 默认值（全部初始 false，按阶段逐步启用）
-export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  diffViewer: true,
-  cleaning: false,
-  searchReplace: false,
-  undoRedo: false,
-  exportFeature: true,
-  mergeCore: true,
-};
+
