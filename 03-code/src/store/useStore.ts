@@ -759,23 +759,44 @@ export const useStore = create<AppState>((set, get) => ({
       const newStates = { ...state.connectionStates };
       newStates[cpId] = !(newStates[cpId] ?? true);
 
+      console.log('[toggleConnectionMerge] cpId:', cpId, 'newState:', newStates[cpId]);
+      console.log('[toggleConnectionMerge] fileContents:', state.fileContents);
+      console.log('[toggleConnectionMerge] connectionPoints:', state.connectionPoints.map(cp => ({ id: cp.id, overlap: cp.overlapLength, auto: cp.isAutoMerged })));
+      console.log('[toggleConnectionMerge] connectionStates (before):', state.connectionStates);
+
       // 根据 fileContents 和连接状态重建 mergedText
-      if (state.fileContents.length === 0) return { connectionStates: newStates };
+      if (!state.fileContents || state.fileContents.length === 0) {
+        console.warn('[toggleConnectionMerge] fileContents empty, cannot rebuild');
+        return { connectionStates: newStates };
+      }
 
       let rebuilt = state.fileContents[0];
       for (let i = 1; i < state.fileContents.length; i++) {
         const cp = state.connectionPoints[i - 1];
         if (!cp) { rebuilt += '\n' + state.fileContents[i]; continue; }
         const isMerged = newStates[cp.id] ?? cp.isAutoMerged;
-        if (isMerged) {
-          // 合并态：跳过重叠部分
-          rebuilt += state.fileContents[i].slice(cp.overlapLength);
+        if (isMerged && cp.overlapLength > 0) {
+          // 合并态且有重叠：在 rebuilt 中找到重叠文本位置，原地插入剩余内容
+          const overlapText = state.fileContents[i].slice(0, cp.overlapLength);
+          const insertPos = rebuilt.indexOf(overlapText);
+          if (insertPos >= 0) {
+            const afterOverlap = insertPos + overlapText.length;
+            const unique = state.fileContents[i].slice(cp.overlapLength);
+            console.log(`[toggleConnectionMerge] file[${i}] merged: insert unique at pos ${afterOverlap}`);
+            rebuilt = rebuilt.slice(0, afterOverlap) + unique + rebuilt.slice(afterOverlap);
+          } else {
+            // 兜底：追加到末尾
+            console.log(`[toggleConnectionMerge] file[${i}] overlap text not found, appending`);
+            rebuilt += '\n' + state.fileContents[i];
+          }
         } else {
-          // 保留态：完整追加（带 \n 分隔）
+          // 保留态 / 无重叠：完整追加（带 \n 分隔）
+          console.log(`[toggleConnectionMerge] file[${i}] ${isMerged ? 'merged(overlap=0)' : 'cut'}: appending with \\n`);
           rebuilt += '\n' + state.fileContents[i];
         }
       }
 
+      console.log('[toggleConnectionMerge] rebuilt mergedText:', JSON.stringify(rebuilt));
       return { connectionStates: newStates, mergedText: rebuilt };
     }),
 

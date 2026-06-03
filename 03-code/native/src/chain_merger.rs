@@ -1,5 +1,5 @@
 /// V4.0 链式重叠合并引擎
-/// 实现最长后缀-前缀匹配算法，按文件顺序合并为连续文本。
+/// 在全文任意位置查找 needle 的最长前缀匹配，原地插入剩余内容。
 
 #[allow(unused_imports)]
 use napi::bindgen_prelude::*;
@@ -75,33 +75,50 @@ pub fn chain_merge(file_data_list: Vec<FileData>, threshold: u32) -> MergeResult
             continue;
         }
 
-        let overlap = find_overlap(&merged_text, &file_data.content);
-        let position = merged_text.len() as u32;
+        // 在 merged_text 中查找 file_data.content 的最长前缀匹配
+        let (pos, overlap) = find_overlap_anywhere(&merged_text, &file_data.content);
         let cp_id = format!("cp_{}", connection_points.len());
 
         if overlap >= threshold as usize && overlap > 0 {
-            merged_text.push_str(&file_data.content[overlap..]);
+            // 自动合并：在匹配位置插入 needle 的剩余内容
+            let byte_overlap = char_to_byte(&file_data.content, overlap);
+            let insert_byte = char_to_byte(&merged_text, pos + overlap);
+            let suffix = merged_text[insert_byte..].to_string();
+            merged_text.truncate(insert_byte);
+            merged_text.push_str(&file_data.content[byte_overlap..]);
+            merged_text.push_str(&suffix);
 
-            let snippet = if overlap > 50 { format!("{}...", &file_data.content[..50]) }
-                          else { file_data.content[..overlap].to_string() };
+            // 连接点的 position 为匹配插入点的字符偏移
+            let snippet = if overlap > 50 {
+                let byte_50 = char_to_byte(&file_data.content, 50);
+                format!("{}...", &file_data.content[..byte_50])
+            } else {
+                let byte_end = char_to_byte(&file_data.content, overlap);
+                file_data.content[..byte_end].to_string()
+            };
 
             connection_points.push(ConnectionPoint {
                 id: cp_id, file_a: prev_name.clone(), file_b: file_data.file_name.clone(),
                 overlap_length: overlap as u32, overlap_snippet: snippet,
-                is_auto_merged: true, position,
+                is_auto_merged: true, position: (pos + overlap) as u32,
             });
         } else {
+            // 待确认 / 无重叠：追加到末尾
             if !merged_text.is_empty() && !merged_text.ends_with('\n') { merged_text.push('\n'); }
             merged_text.push_str(&file_data.content);
 
-            let snippet = if overlap > 0 && overlap <= 50 { file_data.content[..overlap].to_string() }
-                          else if overlap > 50 { format!("{}...", &file_data.content[..50]) }
-                          else { String::new() };
+            let snippet = if overlap > 0 && overlap <= 50 {
+                let byte_end = char_to_byte(&file_data.content, overlap);
+                file_data.content[..byte_end].to_string()
+            } else if overlap > 50 {
+                let byte_50 = char_to_byte(&file_data.content, 50);
+                format!("{}...", &file_data.content[..byte_50])
+            } else { String::new() };
 
             connection_points.push(ConnectionPoint {
                 id: cp_id, file_a: prev_name.clone(), file_b: file_data.file_name.clone(),
                 overlap_length: overlap as u32, overlap_snippet: snippet,
-                is_auto_merged: false, position,
+                is_auto_merged: false, position: merged_text.chars().count() as u32 - file_data.content.chars().count() as u32,
             });
         }
     }
@@ -115,15 +132,25 @@ pub fn chain_merge(file_data_list: Vec<FileData>, threshold: u32) -> MergeResult
         files_metadata, skipped_files, encoding_warnings, file_contents }
 }
 
-fn find_overlap(haystack: &str, needle: &str) -> usize {
-    if haystack.is_empty() || needle.is_empty() { return 0; }
-    let h: Vec<char> = haystack.chars().collect();
+/// 在 haystack 全文查找 needle 的最长前缀匹配
+/// 返回 (haystack 中的位置(字符数), 匹配长度(字符数))
+fn find_overlap_anywhere(haystack: &str, needle: &str) -> (usize, usize) {
+    if haystack.is_empty() || needle.is_empty() { return (0, 0); }
     let n: Vec<char> = needle.chars().collect();
-    let max = h.len().min(n.len());
+    let max = n.len().min(haystack.chars().count());
     for len in (1..=max).rev() {
-        if h[h.len()-len..] == n[..len] { return len; }
+        let prefix: String = n[..len].iter().collect();
+        if let Some(byte_pos) = haystack.find(&prefix) {
+            let char_pos = haystack[..byte_pos].chars().count();
+            return (char_pos, len);
+        }
     }
-    0
+    (0, 0)
+}
+
+/// 将字符索引转换为字节偏移
+fn char_to_byte(s: &str, char_idx: usize) -> usize {
+    s.char_indices().nth(char_idx).map(|(i, _)| i).unwrap_or(s.len())
 }
 
 #[cfg(test)]
@@ -135,5 +162,13 @@ mod tests {
     #[test] fn t_auto() { let r=chain_merge(vec![fd("a","ABCDEFGHIJ"),fd("b","ABCDEFGHIJKLM")],10); assert!(r.connection_points[0].is_auto_merged); }
     #[test] fn t_pending() { let r=chain_merge(vec![fd("a","ABCDE"),fd("b","FGHIJ")],10); assert!(!r.connection_points[0].is_auto_merged); }
     #[test] fn t_contained() { assert_eq!(chain_merge(vec![fd("a","ABCDE"),fd("b","BC")],3).skipped_files.len(),1); }
-    #[test] fn t_overlap() { assert_eq!(find_overlap("ABCDEFG","DEFGHIJ"),4); assert_eq!(find_overlap("ABC","XYZ"),0); }
+    #[test] fn t_overlap_anywhere() {
+        let (p1, l1) = find_overlap_anywhere("ABCDEFG","DEFGHIJ");
+        assert_eq!(p1, 3); assert_eq!(l1, 4);
+        let (p2, l2) = find_overlap_anywhere("ABC","XYZ");
+        assert_eq!(p2, 0); assert_eq!(l2, 0);
+        let (p3, l3) = find_overlap_anywhere("ABC\n王婷是校舞蹈队的领舞，\n我们高中","王婷是校舞蹈队的领舞，每天");
+        assert_eq!(p3, 4); // "王婷" starts at char 4 (A B C \n 王)
+        assert_eq!(l3, 11); // "王婷是校舞蹈队的领舞，" = 11 chars
+    }
 }

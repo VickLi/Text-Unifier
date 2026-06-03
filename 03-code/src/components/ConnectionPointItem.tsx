@@ -29,16 +29,22 @@ export const ConnectionPointItem: React.FC<Props> = React.memo(({ cp, isMerged, 
         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${statusColor}`}>
           {statusLabel}
         </span>
-        {/* ToggleSwitch */}
+        {/* ToggleSwitch — 无重叠时禁用 */}
         <button
-          onClick={handleToggle}
+          onClick={cp.overlapLength > 0 ? handleToggle : undefined}
+          disabled={cp.overlapLength === 0}
           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-            isMerged ? 'bg-blue-500' : 'bg-gray-300'
+            cp.overlapLength === 0
+              ? 'bg-gray-100 cursor-not-allowed'
+              : isMerged ? 'bg-blue-500' : 'bg-gray-300'
           }`}
           aria-label={isMerged ? '断开连接' : '合并连接'}
+          title={cp.overlapLength === 0 ? '无重叠，无需切换' : undefined}
         >
           <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-            isMerged ? 'translate-x-[18px]' : 'translate-x-[2px]'
+            cp.overlapLength === 0
+              ? 'translate-x-[2px] opacity-50'
+              : isMerged ? 'translate-x-[18px]' : 'translate-x-[2px]'
           }`} />
         </button>
       </div>
