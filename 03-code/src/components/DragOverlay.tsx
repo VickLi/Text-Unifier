@@ -89,27 +89,46 @@ export function useGlobalDragDrop(
     (e: DragEvent) => {
       e.preventDefault();
       dragCounterRef.current = 0;
-      setDragOverlay(false, false);
 
       // 安全访问 dataTransfer.files（可能因跨域/安全策略抛出异常）
       let files: FileList | null = null;
       try {
         files = e.dataTransfer?.files ?? null;
       } catch {
+        setDragOverlay(false, false);
         return;
       }
 
-      if (!files || files.length === 0) return;
+      if (!files || files.length === 0) {
+        setDragOverlay(false, false);
+        return;
+      }
 
-      const validFiles = Array.from(files)
-        .filter((f) => f.name.toLowerCase().endsWith('.txt'))
-        .map((f) => ({
+      const allFiles = Array.from(files);
+      const txtFiles = allFiles.filter((f) => f.name.toLowerCase().endsWith('.txt'));
+      const nonTxtFiles = allFiles.filter((f) => !f.name.toLowerCase().endsWith('.txt'));
+
+      // 显示拒绝反馈（有非 .txt 文件时）
+      if (nonTxtFiles.length > 0) {
+        setDragOverlay(true, true); // 红色遮罩
+        setTimeout(() => setDragOverlay(false, false), 1500);
+
+        const showToast = useStore.getState().showToast;
+        if (txtFiles.length === 0) {
+          showToast('仅支持 .txt 文件', 'error');
+        } else {
+          showToast(`${nonTxtFiles.length} 个非 .txt 文件已被忽略`, 'error');
+        }
+      } else {
+        setDragOverlay(false, false);
+      }
+
+      if (txtFiles.length > 0) {
+        const validFiles = txtFiles.map((f) => ({
           name: f.name,
           path: getFilePath(f),
           size: f.size,
         }));
-
-      if (validFiles.length > 0) {
         onFilesDrop(validFiles);
       }
     },

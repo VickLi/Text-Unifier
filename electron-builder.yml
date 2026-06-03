@@ -9,9 +9,11 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
-  - electron/preload.d.ts
-  - native/*.node
-  - native/index.js
+  - 03-code/electron/preload.d.ts
+  - 03-code/native/*.node
+  - 03-code/native/index.js
+
+buildResources: 05-deployment/icons
 
 win:
   target:
@@ -33,7 +35,7 @@ portable:
   unpackDirName: "TextUnifier_Portable_${version}"
 
 extraResources:
-  - from: native
+  - from: 03-code/native
     to: native
     filter:
       - "*.node"

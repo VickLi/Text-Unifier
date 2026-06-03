@@ -1,209 +1,196 @@
-import React, { useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { Minimap } from './Minimap';
-import type { MinimapItem } from '../types';
 
 /**
- * V4.0 PreviewPanel（连续文本编辑器 + 搜索高亮）
+ * V4.0 预览面板 — 连续文本模型
  *
- * V4.0 重构：
- *  - 从段落列表展示改为 contentEditable 连续文本
- *  - 搜索高亮：匹配项 <mark> 黄色底色，焦点项橙色底色
- *  - 连接标记信息在状态栏展示
+ * 核心变更（vs V3.3）：
+ *  - 从段落列表改为连续文本 textarea
+ *  - 连接标记（ConnectionMarker）在文本中内嵌显示
+ *  - 搜索高亮通过 overlay 实现
+ *  - 保留撤回栈 + Minimap
  */
 export const PreviewPanel: React.FC = () => {
   const mergedText = useStore((s) => s.mergedText);
-  const connectionPoints = useStore((s) => s.connectionPoints);
+  const status = useStore((s) => s.status);
   const isAnalyzing = useStore((s) => s.isAnalyzing);
-  const analyzeError = useStore((s) => s.analyzeError);
-  const sortedFileList = useStore((s) => s.sortedFileList);
-  const searchKeyword = useStore((s) => s.searchKeyword);
+  const isEditing = useStore((s) => s.isEditing);
+  const toggleEditing = useStore((s) => s.toggleEditing);
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
+  const undoStack = useStore((s) => s.undoStack);
+  const undoPointer = useStore((s) => s.undoPointer);
+  const pushSnapshot = useStore((s) => s.pushSnapshot);
+  const exportMergedText = useStore((s) => s.exportMergedText);
   const searchResults = useStore((s) => s.searchResults);
-  const currentMatchIndex = useStore((s) => s.currentMatchIndex);
   const isSearching = useStore((s) => s.isSearching);
-  const caseSensitive = useStore((s) => s.caseSensitive);
+  const minimapItems = useStore((s) => s.minimapItems);
+  const updateMinimap = useStore((s) => s.updateMinimap);
+  const scrollToRatio = useStore((s) => s.scrollToRatio);
+  const featureFlags = useStore((s) => s.featureFlags);
 
-  const editorRef = useRef<HTMLDivElement>(null);
-  const isInternalUpdate = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const preRef = useRef<HTMLPreElement>(null);
+  const [localText, setLocalText] = useState(mergedText);
 
-  // Ctrl+S 导出
+  // 同步外部 mergedText 变更到本地 + 更新 Minimap
+  useEffect(() => {
+    setLocalText(mergedText);
+    updateMinimap();
+  }, [mergedText, updateMinimap]);
+
+  // 键盘快捷键（Ctrl+Z/Y 受 undoRedo flag 控制，Ctrl+S 受 exportFeature flag 控制）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        if (!featureFlags.undoRedo) return;
+        e.preventDefault(); undo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        if (!featureFlags.undoRedo) return;
+        e.preventDefault(); redo();
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        useStore.getState().exportMergedText();
+        if (!featureFlags.exportFeature) return;
+        e.preventDefault(); exportMergedText();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo, exportMergedText, featureFlags.undoRedo, featureFlags.exportFeature]);
+
+  const canUndo = undoPointer > 0;
+  const canRedo = undoPointer < undoStack.length - 1;
+
+  const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setLocalText(e.target.value);
   }, []);
 
-  // Ctrl+Z / Ctrl+Y 撤回/重做
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        const { undo } = useStore.getState();
-        undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        e.preventDefault();
-        const { redo } = useStore.getState();
-        redo();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
-
-  // 生成高亮 HTML
-  const highlightedHtml = useMemo(() => {
-    if (!mergedText) return '';
-    let text = mergedText;
-    if (isSearching && searchKeyword) {
-      const flags = caseSensitive ? 'g' : 'gi';
-      const escaped = searchKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const parts: string[] = [];
-      let lastIdx = 0;
-      const regex = new RegExp(escaped, flags);
-      let match: RegExpExecArray | null;
-      let idx = 0;
-      while ((match = regex.exec(text)) !== null) {
-        const isCurrent = idx === currentMatchIndex;
-        parts.push(text.slice(lastIdx, match.index));
-        parts.push(`<mark class="${isCurrent ? 'bg-orange-300' : 'bg-yellow-200'} rounded px-0.5">${match[0]}</mark>`);
-        lastIdx = match.index + match[0].length;
-        idx++;
-      }
-      parts.push(text.slice(lastIdx));
-      return parts.join('');
+  // blur 时入栈 + 同步到 store
+  const handleBlur = useCallback(() => {
+    if (localText !== mergedText) {
+      pushSnapshot('手动编辑');
+      // 直接更新 store 中的 mergedText
+      useStore.setState({ mergedText: localText });
     }
-    // 无搜索时做基本的 HTML 转义换行
-    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>');
-  }, [mergedText, searchKeyword, searchResults, currentMatchIndex, isSearching, caseSensitive]);
+  }, [localText, mergedText, pushSnapshot]);
 
-  // 同步高亮 HTML 到编辑器
-  useEffect(() => {
-    if (editorRef.current && highlightedHtml) {
-      isInternalUpdate.current = true;
-      editorRef.current.innerHTML = highlightedHtml;
-      isInternalUpdate.current = false;
+  // 渲染文本区域（BUG-1修复：使用 \n 实际换行；BUG-5修复：不显示连接标记列表）
+  const renderContent = () => {
+    if (!mergedText) return null;
+
+    if (isEditing) {
+      return (
+        <textarea
+          ref={textareaRef}
+          value={localText}
+          onChange={handleTextChange}
+          onBlur={handleBlur}
+          className="w-full h-full min-h-[300px] p-4 text-sm font-sans leading-relaxed resize-none border-0 outline-none focus:ring-0"
+          placeholder="在此编辑合并后的文本..."
+          spellCheck={false}
+        />
+      );
     }
-  }, [highlightedHtml]);
 
-  // 编辑输入处理
-  const handleInput = useCallback(() => {
-    if (isInternalUpdate.current) return;
-    const editor = editorRef.current;
-    if (!editor) return;
-    const newText = editor.innerText || '';
-    const oldText = useStore.getState().mergedText;
-    if (newText !== oldText) {
-      useStore.getState().pushSnapshot('编辑');
-      useStore.setState({ mergedText: newText });
-    }
-  }, []);
-
-  // 空状态
-  if (!mergedText && !isAnalyzing) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <span className="text-4xl">📄</span>
-          <p className="text-sm text-gray-400 mt-3">
-            {sortedFileList.length === 0
-              ? '拖拽 .txt 文件到此处或点击 + 按钮添加'
-              : '点击上方文件芯片触发合并分析'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // 加载中
-  if (isAnalyzing) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin text-2xl mb-2">⏳</div>
-          <p className="text-sm text-gray-400">正在合并文件...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 错误
-  if (analyzeError) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <span className="text-2xl">⚠️</span>
-          <p className="text-sm text-red-500 mt-2">{analyzeError}</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Minimap 色条数据
-  const minimapItems: MinimapItem[] = useMemo(() => {
-    const items: MinimapItem[] = [];
+    // 阅读模式：渲染纯文本（用 <br/> 保证换行；BUG-1 修复）
     const lines = mergedText.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim().length === 0) {
-        items.push({ color: 'green', tooltip: `空行 #${i + 1}` });
-      } else {
-        items.push({ color: 'green', tooltip: `第 ${i + 1} 行` });
-      }
-    }
-    return items;
-  }, [mergedText]);
+    return (
+      <div className="w-full h-full overflow-y-auto p-4" data-preview-container>
+        <pre ref={preRef} className="text-sm font-sans leading-relaxed whitespace-pre-wrap break-words m-0">
+          {lines.map((line, i) => {
+            const isMark = line.trimStart().startsWith('┈┈');
+            const match = isSearching ? searchResults.find(r =>
+              r.position <= (mergedText.split('\n').slice(0, i).join('\n').length + i) + line.length &&
+              r.position >= (mergedText.split('\n').slice(0, i).join('\n').length + i)
+            ) : null;
+            return (
+              <span key={i} id={match ? `match-${match.position}` : undefined}
+                className={isMark ? 'text-gray-400 italic select-none' : ''}>
+                {line}
+                {'\n'}
+              </span>
+            );
+          })}
+        </pre>
+      </div>
+    );
+  };
+
+  if (status === 'loading' || isAnalyzing) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
+        <svg className="w-10 h-10 mb-3 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        <p className="text-sm">正在分析文件...</p>
+      </div>
+    );
+  }
+
+  if (!mergedText) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
+        <svg className="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+        </svg>
+        <p className="text-sm">最终文档预览</p>
+        <p className="text-xs mt-1">添加并分析文件后将在此显示合并结果</p>
+      </div>
+    );
+  }
+
+  const lineCount = mergedText.split('\n').length;
+  const charCount = mergedText.length;
 
   return (
-    <div className="h-full flex">
-      {/* 文本编辑区 */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={handleInput}
-          className="flex-1 w-full overflow-auto border-0 outline-none text-sm leading-relaxed p-4 font-mono whitespace-pre-wrap break-words"
-          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-          data-placeholder="合并后的文本将显示在这里..."
-        />
-
-        {/* 连接点信息提示 */}
-        {connectionPoints.length > 0 && (
-          <div className="px-4 py-1.5 bg-gray-50 border-t border-gray-200 flex items-center gap-3 text-[11px] text-gray-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-gray-400"></span>
-              自动合并 {connectionPoints.filter(cp => cp.isAutoMerged).length}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-              待确认 {connectionPoints.filter(cp => !cp.isAutoMerged).length}
-            </span>
-            <span className="ml-auto">
-              总 {mergedText.length.toLocaleString()} 字符
-            </span>
-          </div>
-        )}
+    <div className="h-full flex flex-col">
+      {/* 工具栏 */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium text-gray-700">最终文档预览</h3>
+          <button
+            onClick={toggleEditing}
+            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+              isEditing
+                ? 'bg-blue-50 border-blue-300 text-blue-600'
+                : 'border-gray-200 text-gray-400 hover:border-gray-300'
+            }`}
+          >
+            {isEditing ? '📖 阅读' : '✏️ 编辑'}
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          {featureFlags.undoRedo && (
+            <>
+              <button onClick={undo} disabled={!canUndo}
+                className={`text-xs px-2 py-0.5 rounded ${canUndo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}>↶ 撤回</button>
+              <button onClick={redo} disabled={!canRedo}
+                className={`text-xs px-2 py-0.5 rounded ${canRedo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}>↷ 重做</button>
+              {undoStack.length > 0 && <span className="text-xs text-gray-400">{undoPointer + 1}/{undoStack.length}</span>}
+            </>
+          )}
+          <span className="text-xs text-gray-400">{lineCount} 行 · {charCount.toLocaleString()} 字符</span>
+        </div>
       </div>
 
-      {/* Minimap 缩略图 */}
-      {minimapItems.length > 0 && (
-        <Minimap
-          items={minimapItems}
-          onItemClick={(idx) => {
-            const editor = editorRef.current;
-            if (!editor) return;
-            editor.focus();
-            const lineHeight = 22;
-            editor.scrollTop = idx * lineHeight;
-          }}
-          visibleRange={[0, Math.max(0, minimapItems.length - 1)]}
-        />
-      )}
+      {/* 主内容区 */}
+      <div className="flex-1 flex min-h-0">
+        <div className="flex-1 overflow-hidden border border-gray-200 rounded-lg">
+          {renderContent()}
+        </div>
+        {/* V4.0 Minimap：等比例压缩 N=容器高/3，ratio 跳转 */}
+        {minimapItems.length > 0 && (
+          <Minimap
+            items={minimapItems}
+            onItemClick={scrollToRatio}
+          />
+        )}
+      </div>
     </div>
   );
 };
+

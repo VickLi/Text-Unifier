@@ -81,9 +81,10 @@ release:
 |:--------|:------|
 | GitHub Token | 如需自动发布，需配置 `GITHUB_TOKEN` 或 Personal Access Token |
 | 发布权限 | 确认当前用户对仓库有写入权限 |
-| 便携版 ZIP | `TextUnifier_Portable_v4.0.0.zip` 需在本地构建后上传 |
+| 便携版 ZIP | ✅ **已构建** — `05-deployment/portable/TextUnifier_Portable_v4.0.0.zip` (120.4 MB) |
+| 便携版目录 | ✅ **已就绪** — `05-deployment/portable/TextUnifier_Portable_v4.0.0/`，安装脚本可直接引用 |
 | macOS/Linux 构建 | 如需跨平台发布，需在对应 OS 上执行构建 |
 
 ---
 
-*本报告由部署运维流程自动生成。请在补充 `.github/config.yml` 配置后重新执行自动发布流程。*
+*本报告由部署运维流程自动生成。便携版安装包已成功构建。请在补充 `.github/config.yml` 配置后重新执行自动发布流程。*

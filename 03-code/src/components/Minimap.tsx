@@ -1,68 +1,70 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
 import type { MinimapItem } from '../types';
-import { Tooltip } from './Tooltip';
 
 interface MinimapProps {
-  /** 色条列表 */
   items: MinimapItem[];
-  /** 点击跳转回调 */
-  onItemClick: (index: number) => void;
-  /** 当前可视段落范围 [startIdx, endIdx] */
-  visibleRange: [number, number];
+  onItemClick: (ratio: number) => void;
 }
 
+const COLOR_MAP: Record<string, string> = {
+  green: 'bg-green-400 hover:bg-green-600',
+  orange: 'bg-orange-400 hover:bg-orange-600',
+  red: 'bg-red-400 hover:bg-red-600',
+};
+
 /**
- * V3.3 Minimap 缩略图（RQ-04）
- *
- * 预览区右侧 30px 宽的细长柱状图
- * 每一段对应一个 2px 高色条 + 1px 间距
- * 颜色与段落状态指示器一致（绿/红/橙）
+ * V4.0 Minimap — 等比例压缩全文（N ≈ 容器高度/3）
+ * - 绿色 = 普通文本区
+ * - 橙色 = 连接点区域
+ * - hover 显示行号 tooltip
  */
-export const Minimap: React.FC<MinimapProps> = ({ items, onItemClick, visibleRange }) => {
-  const [tooltipContent, setTooltipContent] = React.useState<string[]>([]);
-  const [tooltipPos, setTooltipPos] = React.useState<{ x: number; y: number } | null>(null);
+export const Minimap: React.FC<MinimapProps> = ({ items, onItemClick }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [N, setN] = useState(1);
+  const [hoverIdx, setHoverIdx] = useState(-1);
 
-  const handleMouseEnter = useCallback((e: React.MouseEvent, idx: number) => {
-    setTooltipContent([items[idx]?.tooltip || '']);
-    setTooltipPos({ x: e.clientX, y: e.clientY });
-  }, [items]);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    setTooltipPos({ x: e.clientX, y: e.clientY });
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      setN(Math.max(1, Math.floor(el.clientHeight / 3)));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
-  const handleMouseLeave = useCallback(() => {
-    setTooltipContent([]);
-    setTooltipPos(null);
-  }, []);
+  const handleClick = useCallback(
+    (idx: number) => onItemClick(idx / Math.max(1, N - 1)),
+    [N, onItemClick]
+  );
+
+  const visible = items.slice(0, N);
 
   return (
-    <div className="relative shrink-0 w-[30px] ml-1 overflow-hidden bg-gray-100 rounded-r">
-      <div className="flex flex-col py-1" style={{ gap: '1px' }}>
-        {items.map((item, idx) => {
-          const isVisible = idx >= visibleRange[0] && idx <= visibleRange[1];
-          const bgClass = {
-            green: isVisible ? 'bg-green-500' : 'bg-green-300',
-            red: isVisible ? 'bg-red-400' : 'bg-red-200',
-            orange: isVisible ? 'bg-orange-400' : 'bg-orange-200',
-          }[item.color];
-
-          return (
-            <div
-              key={idx}
-              className={`h-[2px] w-full rounded-full cursor-pointer transition-colors hover:brightness-125 ${bgClass}`}
-              onClick={() => onItemClick(idx)}
-              onMouseEnter={(e) => handleMouseEnter(e, idx)}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
-              role="button"
-              tabIndex={-1}
-              aria-label={`跳转到第 ${idx + 1} 段: ${item.tooltip}`}
-            />
-          );
-        })}
+    <div
+      ref={containerRef}
+      className="relative shrink-0 w-[30px] ml-1 bg-gray-100 rounded-r h-full"
+      role="complementary"
+      aria-label="文档缩略图"
+    >
+      <div className="flex flex-col py-px h-full" style={{ gap: '1px' }}>
+        {visible.map((item, idx) => (
+          <div
+            key={idx}
+            className={`h-[2px] w-full rounded-full cursor-pointer transition-colors shrink-0 ${
+              COLOR_MAP[item.color] || COLOR_MAP.green
+            } ${hoverIdx === idx ? 'ring-1 ring-blue-400 scale-y-[2]' : ''}`}
+            onClick={() => handleClick(idx)}
+            onMouseEnter={() => setHoverIdx(idx)}
+            onMouseLeave={() => setHoverIdx(-1)}
+            title={item.tooltip}
+            role="button"
+            tabIndex={-1}
+            aria-label={`跳转到 ${item.tooltip}`}
+          />
+        ))}
       </div>
-      <Tooltip visible={tooltipPos !== null} content={tooltipContent} position={tooltipPos} />
     </div>
   );
 };
+

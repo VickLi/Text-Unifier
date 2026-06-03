@@ -1,19 +1,33 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { AppMode } from '../types';
 import { useStore } from '../store/useStore';
 
 /**
  * 模式切换条（V3.2 RQ-05）
+ * V4.0: 按 Feature Flag 动态过滤可用模式
  */
 export const ModeTabs: React.FC = () => {
   const activeMode = useStore((s) => s.activeMode);
   const setActiveMode = useStore((s) => s.setActiveMode);
   const sortedFileList = useStore((s) => s.sortedFileList);
+  const featureFlags = useStore((s) => s.featureFlags);
 
-  const modes: { key: AppMode; label: string; icon: string }[] = [
-    { key: 'merge', label: '合并去重', icon: '🔗' },
-    { key: 'compare', label: '文档对比', icon: '📋' },
-  ];
+  const modes: { key: AppMode; label: string; icon: string }[] = [];
+  if (featureFlags.mergeCore) modes.push({ key: 'merge', label: '合并去重', icon: '🔗' });
+  if (featureFlags.diffViewer) modes.push({ key: 'compare', label: '文档对比', icon: '📋' });
+
+  // Flag 变化时，如果当前模式不可用，自动切换到第一个可用模式
+  useEffect(() => {
+    const isMergeAvail = featureFlags.mergeCore;
+    const isCompareAvail = featureFlags.diffViewer;
+    if (activeMode === 'merge' && !isMergeAvail && isCompareAvail) {
+      setActiveMode('compare');
+    } else if (activeMode === 'compare' && !isCompareAvail && isMergeAvail) {
+      setActiveMode('merge');
+    }
+  }, [featureFlags.mergeCore, featureFlags.diffViewer, activeMode, setActiveMode]);
+
+  if (modes.length === 0) return null;
 
   return (
     <div className="flex shrink-0 border-b border-gray-200 bg-white px-6">

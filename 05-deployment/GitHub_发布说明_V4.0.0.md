@@ -93,7 +93,7 @@ V4.0.0 是对 Text Unifier 的一次**重大项目重构**。核心算法从 V3.
 | `installer/安装程序.cmd` | 安装脚本（需管理员权限） |
 | `installer/卸载程序.cmd` | 卸载脚本 |
 
-> **注意**：安装包需在本地执行 `npm run electron:build` 后从 `release/` 目录获取。
+> **便携版已构建**：`05-deployment/portable/TextUnifier_Portable_v4.0.0.zip` (120.4 MB)
 
 ### 📄 文档归档
 

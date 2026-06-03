@@ -54,9 +54,8 @@ export const SortableChip: React.FC<SortableChipProps> = React.memo(
         </svg>
         <span className="group relative flex-shrink-0">
           <span className="max-w-[120px] truncate text-gray-700 font-medium block">{file.name}</span>
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 hidden group-hover:block z-50 pointer-events-none">
-            <span className="bg-gray-900 text-white text-xs rounded-md px-2.5 py-1.5 shadow-xl block max-w-[360px] break-all">{file.name}</span>
-          </div>
+          {/* BUG-6 修复：使用 fixed 定位避免被 overflow 容器裁剪 */}
+          <span className="fixed hidden group-hover:inline z-[9999] bg-gray-900 text-white text-xs rounded-md px-2.5 py-1.5 shadow-xl max-w-[360px] break-all pointer-events-none" style={{transform:'translate(-50%, -100%)', marginTop:'-6px'}}>{file.name}</span>
         </span>
         <span className="text-gray-400">{formatSize(file.size)}</span>
         {isMain && <span className="text-amber-600 font-bold">★</span>}

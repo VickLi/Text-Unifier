@@ -65,17 +65,6 @@ pub fn detect_encoding(file_path: String) -> Result<String> {
     Ok(result.encoding)
 }
 
-/// V4.0 napi 导出：读取文件文本内容
-///
-/// 读取文件 → 编码探测 → 返回解码后的 UTF-8 文本内容（不执行归一化）
-#[napi]
-pub fn read_file_text(file_path: String) -> Result<String> {
-    let path = Path::new(&file_path);
-    let result = detect_and_read(path)
-        .map_err(|e| to_napi_err(format!("文件读取失败: {}", e)))?;
-    Ok(result.content)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

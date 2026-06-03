@@ -1,11 +1,31 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 import { alignParagraphs } from '../utils/diffUtils';
 
 /**
- * 文档对比双栏视图（V3.2 RQ-05）
- * LCS 段落对齐 + 颜色标记 + 同步滚动
+ * V4.0 文档对比（重写版）— 统一滚动表格式对齐 + DiffMinimap
+ *
+ * 改进：
+ *  - 左右行高度 100% 对齐（同 diffAlignment 数组，左右同索引同高）
+ *  - 中间 DiffMinimap：色条 N≈h/3，颜色对应底部图例
+ *  - 加载时并行读取两个文件
  */
+
+const ROW_BG: Record<string, string> = {
+  match:    'bg-green-50',
+  leftOnly: 'bg-red-50',
+  rightOnly:'bg-blue-50',
+  bothOnly: 'bg-purple-50',
+  diff:     'bg-yellow-50',
+};
+const MINI_COLORS: Record<string, string> = {
+  match:    'bg-green-400',
+  leftOnly: 'bg-red-400',
+  rightOnly:'bg-blue-400',
+  bothOnly: 'bg-purple-400',
+  diff:     'bg-yellow-400',
+};
+
 export const DiffViewer: React.FC = () => {
   const sortedFileList = useStore((s) => s.sortedFileList);
   const diffAlignment = useStore((s) => s.diffAlignment);
@@ -13,142 +33,119 @@ export const DiffViewer: React.FC = () => {
   const diffRightFileName = useStore((s) => s.diffRightFileName);
   const setDiffResult = useStore((s) => s.setDiffResult);
 
-  const leftRef = useRef<HTMLDivElement>(null);
-  const rightRef = useRef<HTMLDivElement>(null);
-  const syncing = useRef(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const miniRef = useRef<HTMLDivElement>(null);
+  const [miniN, setMiniN] = useState(1);
 
-  // BUG-V3.2-002: 组件卸载标志防止异步后 setState
-  // BUG-V3.2-003: 复用完整归一化逻辑减少误匹配
   useEffect(() => {
     let aborted = false;
     if (sortedFileList.length !== 2) { setDiffResult([], '', ''); return; }
-    const normalize = (text: string) => {
-      // 执行完整的前端归一化：统一换行、压缩空白、过滤控制字符
-      let t = text.replace(/\r\n|\r/g, '\n').trim();
-      t = t.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-      const paragraphs = t.split('\n\n').map((p) => {
-        let line = p.trim();
-        line = line.replace(/[ \t]+/g, ' ');
-        line = line.replace(/\u{FEFF}/gu, '');
-        return line;
-      }).filter(Boolean);
-      return paragraphs;
-    };
 
-    const loadAndCompare = async () => {
+    const normalize = (text: string): string[] =>
+      text.replace(/\r\n|\r/g, '\n').trim()
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+        .split('\n\n').map(p => p.replace(/\n/g, ' ').replace(/[ \t]+/g, ' ').trim()).filter(Boolean);
+
+    (async () => {
       try {
-        const { readFileText } = await import('../utils/ipc');
-        const textA = await readFileText(sortedFileList[0].path);
+        const { readFileContent } = await import('../utils/ipc');
+        const [ra, rb] = await Promise.all([
+          readFileContent(sortedFileList[0].path),
+          readFileContent(sortedFileList[1].path),
+        ]);
         if (aborted) return;
-        const textB = await readFileText(sortedFileList[1].path);
-        if (aborted) return;
-        const pa = normalize(textA);
-        const pb = normalize(textB);
-        const alignment = alignParagraphs(pa, pb);
+        const alignment = alignParagraphs(normalize(ra.content), normalize(rb.content));
         if (!aborted) setDiffResult(alignment, sortedFileList[0].name, sortedFileList[1].name);
       } catch {
         if (!aborted) setDiffResult([], '', '');
       }
-    };
-    loadAndCompare();
+    })();
     return () => { aborted = true; };
-  }, [sortedFileList]);
+  }, [sortedFileList, setDiffResult]);
 
-  const onLeftScroll = useCallback(() => {
-    if (syncing.current || !leftRef.current || !rightRef.current) return;
-    syncing.current = true;
-    rightRef.current.scrollTop = leftRef.current.scrollTop;
-    requestAnimationFrame(() => { syncing.current = false; });
+  useEffect(() => {
+    const el = miniRef.current; if (!el) return;
+    const obs = new ResizeObserver(() => setMiniN(Math.max(1, Math.floor(el.clientHeight / 3))));
+    obs.observe(el); return () => obs.disconnect();
   }, []);
 
-  const onRightScroll = useCallback(() => {
-    if (syncing.current || !leftRef.current || !rightRef.current) return;
-    syncing.current = true;
-    leftRef.current.scrollTop = rightRef.current.scrollTop;
-    requestAnimationFrame(() => { syncing.current = false; });
-  }, []);
+  const minimapClick = useCallback((idx: number) => {
+    const rows = scrollRef.current?.querySelectorAll<HTMLElement>('[data-dr]');
+    if (!rows || rows.length === 0) return;
+    const ratio = idx / Math.max(1, miniN - 1);
+    const ti = Math.floor(ratio * (rows.length - 1));
+    rows[Math.min(ti, rows.length - 1)]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [miniN]);
 
   const stats = {
-    matched: diffAlignment.filter((a) => a.type === 'match').length,
-    leftOnly: diffAlignment.filter((a) => a.type === 'leftOnly').length,
-    bothOnly: diffAlignment.filter((a) => a.type === 'bothOnly').length,
-    rightOnly: diffAlignment.filter((a) => a.type === 'rightOnly').length,
-    diffCount: diffAlignment.filter((a) => a.type === 'diff').length,
+    matched: diffAlignment.filter(a => a.type === 'match').length,
+    leftOnly: diffAlignment.filter(a => a.type === 'leftOnly').length,
+    rightOnly: diffAlignment.filter(a => a.type === 'rightOnly').length,
+    bothOnly: diffAlignment.filter(a => a.type === 'bothOnly').length,
+    diffCount: diffAlignment.filter(a => a.type === 'diff').length,
   };
 
-  // OPT-V3.3-001: 仅保留一处提示
   if (sortedFileList.length !== 2) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-gray-400">
-        <div className="text-center">
-          <p className="text-sm mb-1">对比模式需要恰好 2 个文件</p>
-          <p className="text-xs">请在合并去重模式中导入 2 个 TXT 文件后切换</p>
-        </div>
-      </div>
-    );
+    return <div className="flex-1 flex items-center justify-center text-gray-400"><p className="text-sm">对比模式需要恰好 2 个文件</p></div>;
   }
 
-  // V3.3.1 BUG-004 修复：空置侧保留等宽边框，确保左右行高一致
-  const leftColor = (type: string) => {
-    switch (type) {
-      case 'match': return 'bg-green-50 border-l-4 border-green-400';
-      case 'leftOnly': return 'bg-red-50 border-l-4 border-red-400';
-      case 'bothOnly': return 'bg-red-50 border-l-4 border-red-400';
-      case 'diff': return 'bg-gray-100 border-l-4 border-gray-400';
-      default: return 'border-l-4 border-transparent'; // rightOnly → 左栏透明占位
-    }
-  };
-  const rightColor = (type: string) => {
-    switch (type) {
-      case 'match': return 'bg-green-50 border-l-4 border-green-400';
-      case 'rightOnly': return 'bg-blue-50 border-l-4 border-blue-400';
-      case 'bothOnly': return 'bg-blue-50 border-l-4 border-blue-400';
-      case 'diff': return 'bg-gray-100 border-l-4 border-gray-400';
-      default: return 'border-l-4 border-transparent'; // leftOnly → 右栏透明占位
-    }
-  };
+  const leftBar = (t: string) => (
+    t === 'match' ? '#4ade80' : t === 'leftOnly' ? '#f87171' : t === 'bothOnly' ? '#c084fc' : t === 'diff' ? '#facc15' : '#d1d5db'
+  );
+  const rightBar = (t: string) => (
+    t === 'match' ? '#4ade80' : t === 'rightOnly' ? '#60a5fa' : t === 'bothOnly' ? '#c084fc' : t === 'diff' ? '#facc15' : '#d1d5db'
+  );
+
+  const miniItems = diffAlignment.slice(0, miniN);
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* 标题栏 */}
-      <div className="flex border-b border-gray-200 shrink-0">
-        <div className="flex-1 px-4 py-2 text-sm font-medium text-red-700 truncate border-r border-gray-200">{diffLeftFileName || '左栏'}</div>
-        <div className="flex-1 px-4 py-2 text-sm font-medium text-blue-700 truncate">{diffRightFileName || '右栏'}</div>
+      {/* 标题 */}
+      <div className="flex shrink-0 border-b">
+        <div className="flex-1 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 truncate border-r">{diffLeftFileName || '左'}</div>
+        <div className="flex-1 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 truncate">{diffRightFileName || '右'}</div>
       </div>
 
-      {/* 双栏主体 */}
+      {/* 主体：统滚动 + Minimap */}
       <div className="flex-1 flex min-h-0">
-        <div ref={leftRef} onScroll={onLeftScroll} className="flex-1 overflow-y-auto border-r border-gray-200">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {diffAlignment.map((item, idx) => (
-            <div key={idx} className={`px-4 py-2 text-sm ${leftColor(item.type)}`}>
-              <p className="whitespace-pre-wrap break-words">{item.leftText || ''}</p>
+            <div key={idx} data-dr className={`flex min-h-[28px] border-b border-gray-100 ${ROW_BG[item.type] || ''}`}>
+              {/* 左单元格 */}
+              <div className="flex-1 flex border-r border-gray-200">
+                <div className="w-1 shrink-0" style={{backgroundColor: leftBar(item.type)}} />
+                <div className="flex-1 px-3 py-0.5 text-sm whitespace-pre-wrap break-words">{item.leftText || '\u00A0'}</div>
+              </div>
+              {/* 右单元格 */}
+              <div className="flex-1 flex">
+                <div className="w-1 shrink-0" style={{backgroundColor: rightBar(item.type)}} />
+                <div className="flex-1 px-3 py-0.5 text-sm whitespace-pre-wrap break-words">
+                  {item.type === 'diff' && item.diffTokens
+                    ? item.diffTokens.map((tok, ti) => (
+                        <span key={ti} className={tok.isDiff ? 'bg-red-200 text-red-800 rounded px-0.5' : ''}>{tok.text}</span>
+                      ))
+                    : (item.rightText || '\u00A0')}
+                </div>
+              </div>
             </div>
           ))}
         </div>
-        <div ref={rightRef} onScroll={onRightScroll} className="flex-1 overflow-y-auto">
-          {diffAlignment.map((item, idx) => (
-            <div key={idx} className={`px-4 py-2 text-sm ${rightColor(item.type)}`}>
-              {item.type === 'diff' && item.diffTokens ? (
-                <p className="whitespace-pre-wrap break-words">
-                  {item.diffTokens.map((tok, ti) => (
-                    <span key={ti} className={tok.isDiff ? 'bg-red-200 text-red-800 rounded px-0.5' : ''}>{tok.text}</span>
-                  ))}
-                </p>
-              ) : (
-                <p className="whitespace-pre-wrap break-words">{item.rightText || ''}</p>
-              )}
-            </div>
+        {/* DiffMinimap */}
+        <div ref={miniRef} className="shrink-0 w-[18px] bg-gray-100 border-l h-full flex flex-col py-px" style={{gap:'1px'}}>
+          {miniItems.map((item, idx) => (
+            <div key={idx} className={`h-[2px] w-full rounded-full cursor-pointer shrink-0 ${MINI_COLORS[item.type] || 'bg-gray-300'}`}
+              onClick={() => minimapClick(idx)} title={`${item.type} @${idx}`} />
           ))}
         </div>
       </div>
 
-      {/* 统计栏 */}
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 shrink-0">
-        <span>✅ 相同 <strong className="text-gray-700">{stats.matched}</strong></span>
-        <span>🔴 左独有 <strong className="text-red-600">{stats.leftOnly}</strong></span>
-        <span>🔵 右独有 <strong className="text-blue-600">{stats.rightOnly}</strong></span>
-        <span>🟣 交错 <strong className="text-purple-600">{stats.bothOnly}</strong></span>
-        <span>⚪ 差异 <strong className="text-gray-600">{stats.diffCount}</strong></span>
+      {/* 底部图例 */}
+      <div className="flex items-center gap-3 px-4 py-1.5 bg-gray-50 border-t text-xs shrink-0 text-gray-500">
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-400" />相同{stats.matched}</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-400" />左独{stats.leftOnly}</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-400" />右独{stats.rightOnly}</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-purple-400" />交错{stats.bothOnly}</span>
+        <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-400" />差异{stats.diffCount}</span>
       </div>
     </div>
   );

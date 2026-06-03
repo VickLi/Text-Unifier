@@ -7,10 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "electron:ts": "tsc -p tsconfig.electron.json && node scripts/rename-electron-output.cjs",
+    "electron:ts": "tsc -p tsconfig.electron.json && node 03-code/scripts/rename-electron-output.cjs",
     "electron:dev": "npm run electron:ts && vite build && electron .",
-    "electron:build": "npm run electron:ts && vite build && cd native && napi build --platform --release && cd .. && electron-builder",
-    "napi:build": "cd native && napi build --platform --release",
+    "electron:build": "npm run electron:ts && vite build && cd 03-code/native && napi build --platform --release && cd .. && electron-builder",
+    "napi:build": "cd 03-code/native && napi build --platform --release",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -27,8 +27,6 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.0",
     "autoprefixer": "^10.4.19",
-    "electron": "^31.0.0",
-    "electron-builder": "^25.0.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.0",

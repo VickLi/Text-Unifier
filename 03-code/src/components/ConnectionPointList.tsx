@@ -35,8 +35,16 @@ export const ConnectionPointList: React.FC = () => {
                   : 'border-gray-200 hover:bg-gray-50'
               }`}
               onClick={() => {
-                const el = document.getElementById(`match-${r.position}`);
-                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // BUG-3 修复：滚动到搜索结果位置
+                const container = document.querySelector('[data-preview-container]');
+                const target = document.getElementById(`match-${r.position}`);
+                if (container && target) {
+                  const containerRect = container.getBoundingClientRect();
+                  const targetRect = target.getBoundingClientRect();
+                  container.scrollTop += targetRect.top - containerRect.top - containerRect.height / 3;
+                }
+                // 更新当前匹配索引
+                useStore.setState({ currentMatchIndex: r.index });
               }}
             >
               <div className="text-[11px] text-gray-500">

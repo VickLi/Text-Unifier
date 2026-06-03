@@ -200,7 +200,7 @@ native/src/
 
 | 属性 | 说明 |
 | :--- | :--- |
-| **职责** | 连续文本可编辑区 + 连接标记 + Minimap 缩略图 + 悬停溯源 Tooltip |
+| **职责** | 连续文本可编辑区 + 连接标记 + **Minimap 缩略图**（30px 宽，色条数 N ≈ 容器高度/3 动态计算，等比例压缩全文高度，点击跳转 `scrollTop = 全文高度 × (i/N)`）+ 悬停溯源 Tooltip |
 | **源文件** | `PreviewPanel.tsx`, `ConnectionMarker.tsx`, `Minimap.tsx`, `Tooltip.tsx` |
 | **依赖模块** | Store（`mergedText`, `connectionPoints`, `connectionStates`） |
 | **对外接口** | 文本编辑 blur 入栈、连接标记处「切断」/「连接」按钮、Minimap 点击跳转 |
@@ -478,7 +478,7 @@ App
 │   │   │       ├── MarkerText "┈┈ 连接 (A↔B, N字) ┈┈"
 │   │   │       └── ActionButton (切断/连接)
 │   │   ├── Minimap (30px right, sticky)
-│   │   │   └── MinimapItem × N (2px色条, 连接点特殊标记)
+│   │   │   └── MinimapItem × N (2px色条+1px间距, N≈容器高/3, 等比例压缩, 连接点=黄/蓝)
 │   │   ├── SourceTooltip (hover 300ms, 跟随鼠标+8px)
 │   │   │   └── "来源: A.txt" / "重叠区: A ↔ B (N字)"
 │   │   └── EmptyState "拖拽 .txt 文件到此处或点击 + 按钮添加"

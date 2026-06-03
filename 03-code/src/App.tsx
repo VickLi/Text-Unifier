@@ -1,183 +1,253 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { useStore } from './store/useStore';
+import { mergeFiles } from './utils/ipc';
 import { FileChipBar } from './components/FileChipBar';
 import { DragOverlay, useGlobalDragDrop } from './components/DragOverlay';
 import { ModeTabs } from './components/ModeTabs';
 import { ConnectionPointList } from './components/ConnectionPointList';
 import { PreviewPanel } from './components/PreviewPanel';
-import { CleanPanel } from './components/CleanPanel';
 import { ExportButton } from './components/ExportButton';
+import { CleanPanel } from './components/CleanPanel';
 import { DiffViewer } from './components/DiffViewer';
 import { MergeSettings } from './components/MergeSettings';
+import type { ToastMessage } from './types';
 
-/** 可拖拽调整宽度的面板容器 */
-const ResizablePanel: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [width, setWidth] = useState(280);
-  const dragging = useRef(false);
-
-  const onMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = true;
-    const startX = e.clientX;
-    const startWidth = width;
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      const delta = ev.clientX - startX;
-      const newWidth = Math.min(500, Math.max(200, startWidth + delta));
-      setWidth(newWidth);
-    };
-    const onMouseUp = () => {
-      dragging.current = false;
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  };
-
-  return (
-    <div className="flex shrink-0 mr-4" style={{ width }}>
-      <div className="flex-1 min-w-0">{children}</div>
-      <div
-        className="w-1.5 cursor-col-resize hover:bg-blue-300 active:bg-blue-400 rounded transition-colors shrink-0"
-        onMouseDown={onMouseDown}
-      />
-    </div>
-  );
-};
+const SCAN_TIMEOUT_MS = 60000;
 
 const App: React.FC = () => {
   const sortedFileList = useStore((s) => s.sortedFileList);
-  const mergedText = useStore((s) => s.mergedText);
-  const isAnalyzing = useStore((s) => s.isAnalyzing);
+  const status = useStore((s) => s.status);
+  const errorMessage = useStore((s) => s.errorMessage);
   const analyzeError = useStore((s) => s.analyzeError);
   const activeMode = useStore((s) => s.activeMode);
-  const undoStack = useStore((s) => s.undoStack);
-  const undoPointer = useStore((s) => s.undoPointer);
+  const featureFlags = useStore((s) => s.featureFlags);
+  const setStatus = useStore((s) => s.setStatus);
+  const setError = useStore((s) => s.setError);
+  const setMergeResult = useStore((s) => s.setMergeResult);
   const addFiles = useStore((s) => s.addFiles);
-  const runMerge = useStore((s) => s.runMerge);
+  const resetSession = useStore((s) => s.resetSession);
   const clearUndoStack = useStore((s) => s.clearUndoStack);
-  const toastMessages = useStore((s) => s.toastMessages);
-  const removeToast = useStore((s) => s.removeToast);
-  const loadingRef = useRef(false);
+  const overlapThreshold = useStore((s) => s.overlapThreshold);
   const [showMergeSettings, setShowMergeSettings] = useState(false);
+  const loadingRef = useRef(false);
 
-  /** 处理文件选择 → 触发合并 */
+  /** V4.0: 处理文件选择 → 调用链式重叠合并 */
   const handleFilesSelected = useCallback(
     async (files: { name: string; path: string; size: number }[]) => {
       if (loadingRef.current) return;
       loadingRef.current = true;
+
+      const existingPaths = sortedFileList.map((f) => f.path);
+      const newPaths = files.map((f) => f.path);
+      const allPaths = [...existingPaths, ...newPaths];
+
       addFiles(files);
       clearUndoStack();
-      // 等待状态更新后触发合并
-      setTimeout(async () => {
-        await runMerge();
+
+      if (allPaths.length === 0) {
         loadingRef.current = false;
-      }, 50);
+        return;
+      }
+
+      setStatus('loading');
+      setError(null);
+
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('分析超时（60秒），请检查文件大小或重试')), SCAN_TIMEOUT_MS)
+        );
+        const resultPromise = mergeFiles(allPaths, overlapThreshold);
+        const result = await Promise.race([resultPromise, timeoutPromise]);
+        setMergeResult(result);
+      } catch (error) {
+        setError(`分析失败: ${error}`);
+        setStatus('error');
+      } finally {
+        loadingRef.current = false;
+      }
     },
-    [addFiles, runMerge, clearUndoStack]
+    [sortedFileList, addFiles, setStatus, setError, setMergeResult, clearUndoStack, overlapThreshold]
   );
 
+  // V3.2 全窗口拖拽
   useGlobalDragDrop(handleFilesSelected);
 
-  const hasContent = !!mergedText;
+  const handleReset = useCallback(() => {
+    resetSession();
+  }, [resetSession]);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50" role="application" aria-label="文档终版确定器">
       {/* 标题栏 */}
       <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-gray-900">文档终版确定器</h1>
-          <span className="text-xs text-white bg-blue-500 px-2 py-0.5 rounded">Text Unifier v4.0</span>
+          <h1 className="text-lg font-semibold text-gray-900">
+            文档终版确定器
+          </h1>
+          <span className="text-xs text-white bg-blue-500 px-2 py-0.5 rounded">
+            Text Unifier v4.0
+          </span>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowMergeSettings(true)}
-            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-            title="合并设置"
-            aria-label="合并设置"
-          >≡</button>
-        </div>
-        <div className="flex items-center gap-3">
-          <ExportButton />
+          {/* V4.0 合并设置入口 */}
+          {featureFlags.mergeCore && status === 'ready' && (
+            <button
+              onClick={() => setShowMergeSettings(true)}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              title="合并设置"
+            >
+              ≡
+            </button>
+          )}
+          {featureFlags.mergeCore && status === 'ready' && (
+            <button
+              onClick={handleReset}
+              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              aria-label="重新开始，清空当前分析结果"
+            >
+              重新开始
+            </button>
+          )}
+          {featureFlags.exportFeature ? (
+            <ExportButton />
+          ) : (
+            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-gray-200 text-gray-400 cursor-not-allowed">
+              导出功能已禁用
+            </span>
+          )}
         </div>
       </header>
 
-      {/* 模式切换 */}
-      <ModeTabs />
-
-      {/* 全窗口拖拽遮罩 */}
-      <DragOverlay />
-
-      {/* 文件芯片栏 */}
-      <FileChipBar onFilesSelected={handleFilesSelected} />
+      {/* 模式切换条（V3.2）— 当 mergeCore 或 diffViewer 任一启用时显示 */}
+      {(featureFlags.mergeCore || featureFlags.diffViewer) && <ModeTabs />}
 
       {/* 错误提示 */}
-      {analyzeError && (
-        <div className="bg-red-50 border-b border-red-200 px-6 py-1.5 text-sm text-red-600" role="alert">
-          {analyzeError}
+      {(errorMessage || analyzeError) && (
+        <div
+          className="bg-red-50 border-b border-red-200 px-6 py-2 flex items-center gap-2"
+          role="alert"
+          aria-live="assertive"
+        >
+          <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm text-red-700">{errorMessage || analyzeError}</span>
+          <button onClick={() => { setError(null); }} className="ml-auto text-red-400 hover:text-red-600" aria-label="关闭错误提示">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
 
-      {/* 主内容区 */}
-      {activeMode === 'merge' ? (
-        <main className="flex-1 flex gap-0 min-h-0 px-6 pb-4">
-          {/* 左侧：连接点列表（可拖拽调整宽度 200~500px） */}
-          <ResizablePanel>
-            <section className="h-full bg-white border border-gray-200 rounded-xl p-4 overflow-y-auto" aria-label="连接点列表">
-              <ConnectionPointList />
-            </section>
-          </ResizablePanel>
+      {/* 全窗口拖拽遮罩（V3.2 RQ-02） */}
+      <DragOverlay />
+
+      {/* V3.2 文件标签栏 */}
+      <FileChipBar onFilesSelected={handleFilesSelected} />
+
+      {/* 主内容区 — 按 Feature Flag 条件渲染 */}
+      {featureFlags.mergeCore && activeMode === 'merge' && (
+        <main className="flex-1 flex gap-0 min-h-0 px-4 pb-3" role="main">
+          {/* 左侧：连接点列表 / 搜索结果 */}
+          <section className="w-[220px] lg:w-[280px] shrink-0 bg-white border border-gray-200 rounded-xl p-3 overflow-y-auto mr-3" aria-label="连接点列表">
+            <ConnectionPointList />
+          </section>
 
           {/* 中间：预览面板 */}
-          <section className="flex-1 min-w-[55%] bg-white border border-gray-200 rounded-xl overflow-hidden mr-4" aria-label="最终文档预览">
+          <section className="flex-1 min-w-0 bg-white border border-gray-200 rounded-xl p-3 overflow-hidden mr-3" aria-label="最终文档预览">
             <PreviewPanel />
           </section>
 
-          {/* 右侧：内容清洗 */}
-          {hasContent && (
-            <section className="w-[260px] shrink-0 bg-white border border-gray-200 rounded-xl p-4 overflow-y-auto" aria-label="内容清洗">
+          {/* 右侧：内容清洗面板 */}
+          {status === 'ready' && (
+            <section className="w-[220px] lg:w-[260px] shrink-0 bg-white border border-gray-200 rounded-xl p-3 overflow-y-auto" aria-label="内容清洗">
               <CleanPanel />
             </section>
           )}
         </main>
-      ) : (
-        <main className="flex-1 flex min-h-0 px-6 pb-4">
+      )}
+
+      {featureFlags.diffViewer && activeMode === 'compare' && (
+        <main className="flex-1 flex min-h-0 px-4 pb-3" role="main">
           <DiffViewer />
         </main>
       )}
 
-      {/* 状态栏 */}
-      <footer className="bg-white border-t border-gray-200 px-6 py-2 flex items-center justify-between shrink-0 text-xs text-gray-400">
-        <span>
-          {isAnalyzing ? '⏳ 正在合并...' :
-           hasContent ? `✅ ${mergedText.length.toLocaleString()} 字 | ${sortedFileList.length} 个文件` :
-           '就绪 — 请添加 .txt 文件'}
-        </span>
-        <span>
-          {undoStack.length > 0 && `撤回栈 ${undoPointer + 1}/${undoStack.length}`}
-        </span>
-        <span>纯本地处理 · 数据不会上传</span>
-      </footer>
-
-      {/* Toast 容器 */}
-      {toastMessages.length > 0 && (
-        <div className="fixed top-4 right-4 z-60 space-y-2">
-          {toastMessages.map(t => (
-            <div key={t.id} className={`px-4 py-2 rounded-lg shadow-lg text-sm text-white ${
-              t.type === 'success' ? 'bg-green-500' : t.type === 'error' ? 'bg-red-500' : 'bg-gray-700'
-            }`}>
-              <span>{t.message}</span>
-              <button onClick={() => removeToast(t.id)} className="ml-2 opacity-70 hover:opacity-100">✕</button>
-            </div>
-          ))}
-        </div>
+      {!featureFlags.mergeCore && !featureFlags.diffViewer && (
+        <main className="flex-1 flex items-center justify-center min-h-0 px-4 pb-3" role="main">
+          <div className="text-center text-gray-400 select-none">
+            <div className="text-5xl mb-4">🚧</div>
+            <p className="text-lg font-medium text-gray-500">功能模块未启用</p>
+            <p className="text-sm mt-1 text-gray-400">等待 Feature Flag 逐步激活…</p>
+          </div>
+        </main>
       )}
 
       {/* 合并设置弹窗 */}
-      {showMergeSettings && (
+      {featureFlags.mergeCore && showMergeSettings && (
         <MergeSettings onClose={() => setShowMergeSettings(false)} />
       )}
+
+      {/* 状态栏 */}
+      <footer className="bg-white border-t border-gray-200 px-6 py-2 flex items-center justify-between shrink-0" role="status" aria-live="polite">
+        <span className="text-xs text-gray-400">
+          {status === 'idle' && '就绪 — 请添加 .txt 文件开始分析'}
+          {status === 'loading' && '正在分析文件中...'}
+          {status === 'ready' && `分析完成 — ${sortedFileList.length} 个文件`}
+          {status === 'error' && '分析出错，请重试'}
+        </span>
+        <span className="text-xs text-gray-400">
+          纯本地处理 · 数据不会上传
+        </span>
+      </footer>
+      {/* 全局 Toast 通知 */}
+      <ToastContainer />
+    </div>
+  );
+};
+
+/** 全局 Toast 消息渲染 */
+const ToastContainer: React.FC = () => {
+  const toastMessages = useStore((s) => s.toastMessages);
+  const removeToast = useStore((s) => s.removeToast);
+
+  if (toastMessages.length === 0) return null;
+
+  return (
+    <div className="fixed bottom-20 right-6 z-[9999] flex flex-col gap-2 max-w-sm">
+      {toastMessages.map((t) => (
+        <div
+          key={t.id}
+          className={`px-4 py-3 rounded-lg shadow-xl text-sm font-medium flex items-center gap-2 animate-slide-up ${
+            t.type === 'error'
+              ? 'bg-red-600 text-white'
+              : t.type === 'success'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-800 text-white'
+          }`}
+        >
+          {t.type === 'error' ? (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ) : t.type === 'success' ? (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
+          <span className="flex-1">{t.text}</span>
+          <button onClick={() => removeToast(t.id)} className="opacity-70 hover:opacity-100 shrink-0">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      ))}
     </div>
   );
 };

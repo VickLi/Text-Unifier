@@ -8,6 +8,7 @@ src-tauri/
 *.log
 .venv/
 release/
+05-deployment/portable/
 .git-rewrite/
 # Large binary files (excluded from git, use GitHub Releases)
 *.exe

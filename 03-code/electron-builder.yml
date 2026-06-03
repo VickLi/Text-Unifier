@@ -17,11 +17,11 @@ files:
 
 win:
   target:
-    - target: nsis
-      arch: [x64]
     - target: portable
       arch: [x64]
   sign: false
+  certificateFile: ""
+  certificatePassword: ""
 
 electronDist: node_modules/electron/dist
 

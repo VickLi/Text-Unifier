@@ -485,14 +485,15 @@ interface AppState {
 | :--- | :--- | :--- | :--- |
 | `setDiffResult` | `(alignment, leftFile, rightFile) => void` | 设置对比结果 | 无 |
 
-#### 3.2.9 预览区 Actions
+#### 3.2.9 预览区 & Minimap Actions
 
 | Action | 签名 | 说明 | V4.0 变更 |
 | :--- | :--- | :--- | :--- |
-| `setHoveredParagraph` | `(id, sourceFiles?, position?) => void` | 设置悬停段落 | 无 |
-| `setLastClickedParagraphId` | `(id: string \| null) => void` | 设置 Shift 锚点 | 无 |
-| `jumpToParagraph` | `(index: number) => void` | Minimap 点击跳转 | 无 |
-| `_updateMinimap` | `() => void` | 更新 Minimap 色条 | 无 |
+| `scrollToRatio` | `(ratio: number) => void` | Minimap 点击 → `scrollTop = 全文总高度 × ratio` | ⭐ 新增（替代 V3.3 jumpToParagraph） |
+| `updateMinimap` | `() => void` | 根据容器高度动态计算 N（≈ 容器高度/3）+ 更新色条 | ⭐ 新增 |
+| ~~`setHoveredParagraph`~~ | — | — | ❌ 删除（V3.3 段落悬停，V4.0 用 SourceTooltip） |
+| ~~`jumpToParagraph`~~ | — | — | ❌ 删除（V3.3 段落跳转，V4.0 用 scrollToRatio） |
+| ~~`setLastClickedParagraphId`~~ | — | — | ❌ 删除（V3.3 Shift 多选锚点，V4.0 无段落勾选） |
 | `_markModifiedParagraphs` | `(before, after) => void` | 标记被修改段落 ID | 无 |
 
 #### 3.2.10 V4.0 删除的 Actions

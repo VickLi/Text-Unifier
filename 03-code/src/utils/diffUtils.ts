@@ -74,76 +74,87 @@ export function alignParagraphs(left: string[], right: string[]): DiffAlignment[
   let li = 0, ri = 0;
 
   for (const match of lcs) {
-    // 收集本轮 LCS 间隙中的左右独有段落
-    const leftOnlyItems: string[] = [];
+    // V4.0 修复：左侧独有段落优先输出，然后右侧独有段落，不再强行配对
     while (li < match.leftIdx) {
-      leftOnlyItems.push(left[li]);
+      alignment.push({ type: 'leftOnly', leftText: left[li] });
       li++;
     }
-    const rightOnlyItems: string[] = [];
     while (ri < match.rightIdx) {
-      rightOnlyItems.push(right[ri]);
+      alignment.push({ type: 'rightOnly', rightText: right[ri] });
       ri++;
     }
 
-    // 交错配对：左右独有段落合并到同一行，保持文档行对齐
-    const maxGap = Math.max(leftOnlyItems.length, rightOnlyItems.length);
-    for (let k = 0; k < maxGap; k++) {
-      const hasLeft = k < leftOnlyItems.length;
-      const hasRight = k < rightOnlyItems.length;
-      if (hasLeft && hasRight) {
-        alignment.push({ type: 'bothOnly', leftText: leftOnlyItems[k], rightText: rightOnlyItems[k] });
-      } else if (hasLeft) {
-        alignment.push({ type: 'leftOnly', leftText: leftOnlyItems[k] });
-      } else {
-        alignment.push({ type: 'rightOnly', rightText: rightOnlyItems[k] });
-      }
-    }
-
+    // LCS 匹配的相同段落：左右对齐在同一行
     alignment.push({ type: 'match', leftText: left[li], rightText: right[ri] });
     li++; ri++;
   }
 
   // 处理最后一个 LCS 匹配之后的剩余段落
-  const leftRemaining: string[] = [];
-  while (li < left.length) { leftRemaining.push(left[li]); li++; }
-  const rightRemaining: string[] = [];
-  while (ri < right.length) { rightRemaining.push(right[ri]); ri++; }
-
-  const maxTail = Math.max(leftRemaining.length, rightRemaining.length);
-  for (let k = 0; k < maxTail; k++) {
-    const hasLeft = k < leftRemaining.length;
-    const hasRight = k < rightRemaining.length;
-    if (hasLeft && hasRight) {
-      alignment.push({ type: 'bothOnly', leftText: leftRemaining[k], rightText: rightRemaining[k] });
-    } else if (hasLeft) {
-      alignment.push({ type: 'leftOnly', leftText: leftRemaining[k] });
-    } else {
-      alignment.push({ type: 'rightOnly', rightText: rightRemaining[k] });
-    }
+  while (li < left.length) {
+    alignment.push({ type: 'leftOnly', leftText: left[li] });
+    li++;
+  }
+  while (ri < right.length) {
+    alignment.push({ type: 'rightOnly', rightText: right[ri] });
+    ri++;
   }
 
   return mergeSimilarToDiff(alignment);
 }
 
-/** 相邻 bothOnly 若高度相似（> 0.6）则合并为 diff */
+/** 
+ * 扫描相邻 leftOnly+rightOnly 对，相似度 > 0.6 则合并为 diff（逐词差异高亮）
+ * V4.0 修复：对齐策略改为 leftOnly 优先 + rightOnly 在后，不再产生 bothOnly
+ */
 function mergeSimilarToDiff(aligned: DiffAlignment[]): DiffAlignment[] {
   const result: DiffAlignment[] = [];
-  for (const item of aligned) {
-    if (item.type === 'bothOnly' && item.leftText && item.rightText) {
-      const maxLen = Math.max(item.leftText.length, item.rightText.length);
-      const similarity = maxLen > 0 ? 1 - levenshtein(item.leftText, item.rightText) / maxLen : 1;
-      if (similarity > 0.6) {
-        result.push({
-          type: 'diff',
-          leftText: item.leftText,
-          rightText: item.rightText,
-          diffTokens: wordDiff(item.leftText, item.rightText),
-        });
-        continue;
-      }
+  let i = 0;
+
+  while (i < aligned.length) {
+    // 收集连续的 leftOnly 段落
+    const leftGroup: DiffAlignment[] = [];
+    while (i < aligned.length && aligned[i].type === 'leftOnly') {
+      leftGroup.push(aligned[i]);
+      i++;
     }
-    result.push(item);
+    // 收集连续的 rightOnly 段落
+    const rightGroup: DiffAlignment[] = [];
+    while (i < aligned.length && aligned[i].type === 'rightOnly') {
+      rightGroup.push(aligned[i]);
+      i++;
+    }
+
+    // 尝试配对相似段落：minLen 个配对 + 多余的保持原样
+    const minLen = Math.min(leftGroup.length, rightGroup.length);
+    for (let k = 0; k < minLen; k++) {
+      const leftItem = leftGroup[k];
+      const rightItem = rightGroup[k];
+      if (leftItem.leftText && rightItem.rightText) {
+        const maxLen = Math.max(leftItem.leftText.length, rightItem.rightText.length);
+        const dist = levenshtein(leftItem.leftText, rightItem.rightText);
+        const similarity = maxLen > 0 ? 1 - dist / maxLen : 1;
+        if (similarity > 0.6) {
+          result.push({
+            type: 'diff',
+            leftText: leftItem.leftText,
+            rightText: rightItem.rightText,
+            diffTokens: wordDiff(leftItem.leftText, rightItem.rightText),
+          });
+          continue;
+        }
+      }
+      result.push(leftItem);
+      result.push(rightItem);
+    }
+    // 多余的保持原样
+    for (let k = minLen; k < leftGroup.length; k++) result.push(leftGroup[k]);
+    for (let k = minLen; k < rightGroup.length; k++) result.push(rightGroup[k]);
+
+    // 保留 match / diff / bothOnly（兼容旧格式）不变
+    while (i < aligned.length && aligned[i].type !== 'leftOnly' && aligned[i].type !== 'rightOnly') {
+      result.push(aligned[i]);
+      i++;
+    }
   }
   return result;
 }

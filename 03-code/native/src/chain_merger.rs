@@ -1,6 +1,7 @@
 /// V4.0 链式重叠合并引擎
 /// 实现最长后缀-前缀匹配算法，按文件顺序合并为连续文本。
 
+#[allow(unused_imports)]
 use napi::bindgen_prelude::*;
 
 #[napi(object)]
