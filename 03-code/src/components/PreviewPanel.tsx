@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { Minimap } from './Minimap';
+import { ConnectionMarker } from './ConnectionMarker';
+import { Tooltip } from './Tooltip';
 
 /**
  * V4.0 预览面板 — 连续文本模型
@@ -23,16 +25,39 @@ export const PreviewPanel: React.FC = () => {
   const undoPointer = useStore((s) => s.undoPointer);
   const pushSnapshot = useStore((s) => s.pushSnapshot);
   const exportMergedText = useStore((s) => s.exportMergedText);
-  const searchResults = useStore((s) => s.searchResults);
-  const isSearching = useStore((s) => s.isSearching);
+
   const minimapItems = useStore((s) => s.minimapItems);
   const updateMinimap = useStore((s) => s.updateMinimap);
   const scrollToRatio = useStore((s) => s.scrollToRatio);
   const featureFlags = useStore((s) => s.featureFlags);
+  const fileContents = useStore((s) => s.fileContents);
+  const connectionPoints = useStore((s) => s.connectionPoints);
+  const connectionStatesStore = useStore((s) => s.connectionStates);
+  const toggleConnectionMerge = useStore((s) => s.toggleConnectionMerge);
+
+  const sortedFileList = useStore((s) => s.sortedFileList);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
   const [localText, setLocalText] = useState(mergedText);
+
+  // 悬停来源 Tooltip 状态
+  const [hoverInfo, setHoverInfo] = useState<{ visible: boolean; content: string[]; position: { x: number; y: number } | null }>({
+    visible: false, content: [], position: null,
+  });
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleHoverStart = useCallback((e: React.MouseEvent, text: string) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      setHoverInfo({ visible: true, content: [text], position: { x: e.clientX, y: e.clientY } });
+    }, 300);
+  }, []);
+
+  const handleHoverEnd = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    setHoverInfo({ visible: false, content: [], position: null });
+  }, []);
 
   // 同步外部 mergedText 变更到本地 + 更新 Minimap
   useEffect(() => {
@@ -77,6 +102,103 @@ export const PreviewPanel: React.FC = () => {
   }, [localText, mergedText, pushSnapshot]);
 
   // 渲染文本区域（BUG-1修复：使用 \n 实际换行；BUG-5修复：不显示连接标记列表）
+  /** 构建带连接标记的渲染内容（与 toggleConnectionMerge 算法一致） */
+  const renderWithMarkers = () => {
+    if (!fileContents || fileContents.length === 0) {
+      return <pre ref={preRef} className="text-sm font-sans leading-relaxed whitespace-pre-wrap break-words m-0">{mergedText}</pre>;
+    }
+
+    // 用 same 算法构建文本：先组装字符串，再从中找到每个连接点位置
+    let fullText = fileContents[0];
+    const markerPositions: { cpId: string; charPos: number }[] = [];
+
+    for (let i = 1; i < fileContents.length; i++) {
+      const cp = connectionPoints[i - 1];
+      if (!cp) { fullText += '\n' + fileContents[i]; continue; }
+
+      const isMerged = connectionStatesStore[cp.id] ?? cp.isAutoMerged;
+
+      if (isMerged && cp.overlapLength > 0) {
+        // 在 fullText 中找到重叠文本位置，原地插入
+        const overlapText = fileContents[i].slice(0, cp.overlapLength);
+        const insertPos = fullText.indexOf(overlapText);
+        if (insertPos >= 0) {
+          const afterOverlap = insertPos + overlapText.length;
+          markerPositions.push({ cpId: cp.id, charPos: afterOverlap });
+          const unique = fileContents[i].slice(cp.overlapLength);
+          fullText = fullText.slice(0, afterOverlap) + unique + fullText.slice(afterOverlap);
+        } else {
+          fullText += '\n' + fileContents[i];
+        }
+      } else {
+        markerPositions.push({ cpId: cp.id, charPos: fullText.length });
+        fullText += '\n' + fileContents[i];
+      }
+    }
+
+    // 按 charPos 从大到小排序，以便从右向左插入标记（避免位置偏移）
+    markerPositions.sort((a, b) => b.charPos - a.charPos);
+
+    // 在 fullText 的对应位置插入标记占位符，然后分割渲染
+    const parts: React.ReactNode[] = [];
+    // 从文本中提取片段，在标记位置插入 ConnectionMarker
+    const sortedMarkers = connectionPoints.map(cp => ({
+      cp,
+      charPos: markerPositions.find(m => m.cpId === cp.id)?.charPos ?? -1,
+      isMerged: connectionStatesStore[cp.id] ?? cp.isAutoMerged,
+    })).filter(m => m.charPos >= 0).sort((a, b) => a.charPos - b.charPos);
+
+    // 构建每个文本片段对应的源文件名列表
+    const segmentSources: string[] = [];
+    segmentSources.push(sortedFileList[0]?.name || fileContents[0].slice(0, 20));
+    for (let i = 0; i < sortedMarkers.length; i++) {
+      const nextFileIdx = i + 1;
+      segmentSources.push(sortedFileList[nextFileIdx]?.name || `文件 ${nextFileIdx + 1}`);
+    }
+
+    let segIdx = 0;
+    let cursor = 0;
+    for (const m of sortedMarkers) {
+      if (m.charPos > cursor) {
+        const text = fullText.slice(cursor, m.charPos);
+        const source = segmentSources[segIdx] || '未知来源';
+        parts.push(
+          <span
+            key={`t-${cursor}`}
+            onMouseEnter={(e) => handleHoverStart(e, `来源：${source}`)}
+            onMouseLeave={handleHoverEnd}
+          >
+            {text}
+          </span>
+        );
+        segIdx++;
+      }
+      parts.push(
+        <ConnectionMarker key={m.cp.id} cp={m.cp} isMerged={m.isMerged} onToggle={toggleConnectionMerge} />
+      );
+      cursor = m.charPos;
+    }
+    if (cursor < fullText.length) {
+      const text = fullText.slice(cursor);
+      const source = segmentSources[segIdx] || '未知来源';
+      parts.push(
+        <span
+          key={`t-end`}
+          onMouseEnter={(e) => handleHoverStart(e, `来源：${source}`)}
+          onMouseLeave={handleHoverEnd}
+        >
+          {text}
+        </span>
+      );
+    }
+
+    return (
+      <pre ref={preRef} className="text-sm font-sans leading-relaxed whitespace-pre-wrap break-words m-0">
+        {parts}
+      </pre>
+    );
+  };
+
   const renderContent = () => {
     if (!mergedText) return null;
 
@@ -94,26 +216,10 @@ export const PreviewPanel: React.FC = () => {
       );
     }
 
-    // 阅读模式：渲染纯文本（用 <br/> 保证换行；BUG-1 修复）
-    const lines = mergedText.split('\n');
+    // 阅读模式：渲染带连接标记的文本
     return (
       <div className="w-full h-full overflow-y-auto p-4" data-preview-container>
-        <pre ref={preRef} className="text-sm font-sans leading-relaxed whitespace-pre-wrap break-words m-0">
-          {lines.map((line, i) => {
-            const isMark = line.trimStart().startsWith('┈┈');
-            const match = isSearching ? searchResults.find(r =>
-              r.position <= (mergedText.split('\n').slice(0, i).join('\n').length + i) + line.length &&
-              r.position >= (mergedText.split('\n').slice(0, i).join('\n').length + i)
-            ) : null;
-            return (
-              <span key={i} id={match ? `match-${match.position}` : undefined}
-                className={isMark ? 'text-gray-400 italic select-none' : ''}>
-                {line}
-                {'\n'}
-              </span>
-            );
-          })}
-        </pre>
+        {renderWithMarkers()}
       </div>
     );
   };
@@ -190,6 +296,8 @@ export const PreviewPanel: React.FC = () => {
           />
         )}
       </div>
+      {/* 悬停来源 Tooltip */}
+      <Tooltip visible={hoverInfo.visible} content={hoverInfo.content} position={hoverInfo.position} />
     </div>
   );
 };

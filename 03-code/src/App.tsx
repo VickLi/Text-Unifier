@@ -21,6 +21,9 @@ const App: React.FC = () => {
   const analyzeError = useStore((s) => s.analyzeError);
   const activeMode = useStore((s) => s.activeMode);
   const featureFlags = useStore((s) => s.featureFlags);
+  const mergedText = useStore((s) => s.mergedText);
+  const connectionPoints = useStore((s) => s.connectionPoints);
+  const connectionStates = useStore((s) => s.connectionStates);
   const setStatus = useStore((s) => s.setStatus);
   const setError = useStore((s) => s.setError);
   const setMergeResult = useStore((s) => s.setMergeResult);
@@ -194,7 +197,10 @@ const App: React.FC = () => {
         <span className="text-xs text-gray-400">
           {status === 'idle' && '就绪 — 请添加 .txt 文件开始分析'}
           {status === 'loading' && '正在分析文件中...'}
-          {status === 'ready' && `分析完成 — ${sortedFileList.length} 个文件`}
+          {status === 'ready' && featureFlags.mergeCore && (
+            `总 ${mergedText.length} 字 | 连接点 ${connectionPoints.length} (自动${connectionPoints.filter(cp => connectionStates[cp.id] ?? cp.isAutoMerged).length}/待确认${connectionPoints.filter(cp => !(connectionStates[cp.id] ?? cp.isAutoMerged)).length}) | 预估 ${Math.max(1, Math.round(mergedText.length / 500))} KB`
+          )}
+          {status === 'ready' && !featureFlags.mergeCore && `分析完成 — ${sortedFileList.length} 个文件`}
           {status === 'error' && '分析出错，请重试'}
         </span>
         <span className="text-xs text-gray-400">
