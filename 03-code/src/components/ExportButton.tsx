@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 
 /**
@@ -13,14 +13,7 @@ export const ExportButton: React.FC = () => {
   const mergedText = useStore((s) => s.mergedText);
   const status = useStore((s) => s.status);
   const exportMergedText = useStore((s) => s.exportMergedText);
-  const sortedFileList = useStore((s) => s.sortedFileList);
-
   const canExport = status === 'ready' && mergedText.trim().length > 0 && !isExporting;
-
-  const showToast = useCallback((type: 'success' | 'error', message: string) => {
-    setToast({ type, message });
-    setTimeout(() => setToast(null), 4000);
-  }, []);
 
   const handleExport = async () => {
     if (!canExport) return;

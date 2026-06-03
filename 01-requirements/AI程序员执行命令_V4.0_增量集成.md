@@ -3,14 +3,15 @@
 > **传达方式**: 将此文档全文粘贴给 AI 程序员，逐步骤执行
 > **基线代码**: V4.0 当前源码（`03-code/` 或 `src/`）
 > **禁止行为**: 跳过验证步骤、一次改多个 Flag、修改无关文件
+> **重要**: 模块 E(内容清洗)、M(搜索替换)、H(撤回栈) 已从本软件移除，移至独立项目。预览区为只读。
 
 ---
 
 ## 一、你的角色和任务
 
-你是 Text Unifier V4.0 项目的 AI 程序员。当前 V4.0 代码已经过 7 轮修订，所有 12 个模块的代码已存在。你的任务不是从零写代码，而是：
+你是 Text Unifier V4.0 项目的 AI 程序员。当前 V4.0 代码已经过 7 轮修订，所有**保留模块**的代码已存在。你的任务不是从零写代码，而是：
 
-1. 在 Zustand Store 中新增 `featureFlags` 字段（6 个 boolean，全部初始 `false`）
+1. 在 Zustand Store 中新增 `featureFlags` 字段（3 个 boolean，全部初始 `false`）
 2. 按下面规定的**严格阶段顺序**，逐个启用 Flag，验证对应功能
 3. 每个步骤通过后立即 Git commit
 4. 最终移除所有 Flag，交付完整版本
@@ -32,12 +33,11 @@
 featureFlags: {
   diffViewer: false,      // 阶段 1a
   mergeCore: false,       // 阶段 1b
-  cleaning: false,        // 阶段 2
-  searchReplace: false,   // 阶段 2
-  undoRedo: false,        // 阶段 2
   exportFeature: false,   // 阶段 2
 },
 ```
+
+**注意**：模块 E(内容清洗)、M(搜索替换)、H(撤回栈) 已从本软件移除，不设 Flag。预览区为只读。
 
 **验证**: TypeScript 编译零错误。`npm run build` 或 `tsc --noEmit` 通过。
 
@@ -66,18 +66,17 @@ featureFlags: {
 |:---|:---|:---|
 | `diffViewer` | ModeTabs 中的「📋 文档对比」Tab + `<DiffViewer />` + `<DiffStats />` | 「文档对比（未启用）」 |
 | `mergeCore` | ModeTabs 中的「🔗 合并去重」Tab + `<PreviewPanel />` + `<ConnectionPointList />` + `<ConnectionMarker />` + `<Minimap />` | 「合并去重（未启用）」 |
-| `cleaning` | `<CleanPanel />`（含 ToggleButton） | 「内容清洗（未启用）」 |
-| `searchReplace` | CleanPanel 内的 `<SearchReplace />` | 「搜索替换（未启用）」 |
-| `undoRedo` | BottomToolbar 中的撤回/重做按钮 | 隐藏按钮即可（不显示占位） |
 | `exportFeature` | BottomToolbar 中的导出按钮 | 隐藏按钮即可（不显示占位） |
 
-**注意**：模块 A（FileChipBar/DragOverlay）和模块 B 的编码探测部分**不要加 Flag**——它们属于阶段 0 共享基础设施，始终可用。
+**注意**：
+- 模块 A（FileChipBar/DragOverlay）和模块 B 的编码探测部分**不要加 Flag**——它们属于阶段 0 共享基础设施，始终可用。
+- 模块 E/M/H 已移除。如果代码中仍存在 `CleanPanel`, `SearchReplace`, `UndoRedoButtons` 等组件，应**直接删除或注释**，不需要 Flag 包裹。
 
 **验证**: 启动应用（`npm run electron:dev`），界面应显示：
 - 标题栏
 - 空芯片栏（可拖拽文件）
-- 多个灰色占位块（非空白区域）
-- 无任何功能面板
+- 灰色占位块（非空白区域）
+- 无清洗面板、无搜索框、无撤回/重做按钮
 
 **通过后**: `git add -A && git commit -m "step 0.2: wrap all feature components with featureFlags"`
 
@@ -133,7 +132,7 @@ git tag v4.0-phase0-stable
 
 ## 三、阶段 1a：文档对比（模块 I）
 
-> **铁律**：此阶段 `mergeCore`、`cleaning`、`searchReplace`、`undoRedo`、`exportFeature` **全部必须保持 `false`**。只改 `diffViewer`。
+> **铁律**：此阶段 `mergeCore`、`exportFeature` **全部必须保持 `false`**。只改 `diffViewer`。
 
 ### 步骤 1a.1 — 启用 diffViewer Flag
 
@@ -219,12 +218,9 @@ git tag v4.0-phase0-stable
 **操作**：仔细检查界面每个区域。
 
 **验证**：
-- [ ] 无「🔗 合并去重」Tab
-- [ ] 无清洗面板
-- [ ] 无搜索框
-- [ ] 无撤回/重做按钮
-- [ ] 无导出按钮
+- [ ] 无「🔗 合并去重」Tab（仅有灰色占位块）
 - [ ] 无连接点列表
+- [ ] 无导出按钮
 
 **通过后**: 
 ```bash
@@ -238,7 +234,7 @@ git tag v4.0-phase1a-stable
 
 ## 四、阶段 1b：合并去重核心（模块 B 合并算法 + D + C + L）
 
-> **铁律**：阶段 2 全部 flag（`cleaning`、`searchReplace`、`undoRedo`、`exportFeature`）**必须保持 `false`**。只改 `mergeCore`。
+> **铁律**：`exportFeature` **必须保持 `false`**。只改 `mergeCore`。
 
 ### 步骤 1b.1 — 启用 mergeCore Flag
 
@@ -372,17 +368,16 @@ git tag v4.0-phase1a-stable
 
 ---
 
-### 步骤 1b.10 — 验证预览区可编辑 + 溯源
+### 步骤 1b.10 — 验证预览区只读 + 溯源
 
-**操作**：在预览区双击文本进行编辑。
+**操作**：在预览区尝试点击或双击文本。
 
 **验证**：
-- [ ] 文字可修改
-- [ ] blur（失焦）后触发入栈（控制台确认）
+- [ ] 文本**不可编辑**，光标不出现
 - [ ] 悬停文本 300ms → Tooltip「来源：xxx.txt」
 - [ ] 连接点处悬停 → Tooltip「重叠区：A ↔ B (N字重叠)」
 
-**通过后**: `git commit -m "step 1b.10: verify preview editable + source tooltip"`
+**通过后**: `git commit -m "step 1b.10: verify preview read-only + source tooltip"`
 
 ---
 
@@ -415,9 +410,6 @@ git tag v4.0-phase1a-stable
 **操作**：仔细检查界面。
 
 **验证**：
-- [ ] 无清洗面板（右侧 260px 区域为灰色占位块）
-- [ ] 无搜索框
-- [ ] 无撤回/重做按钮
 - [ ] 无导出按钮
 
 **通过后**:
@@ -430,248 +422,37 @@ git tag v4.0-phase1b-stable
 
 ---
 
-## 五、阶段 2：内容增强（E → M → H → J）
+## 五、阶段 2：导出（模块 J）
 
-> **铁律**：四个模块**必须按 E → M → H → J 顺序逐个启用**，不得并行。每个模块验证通过后才能启用下一个。
+> **前置条件**：阶段 1b 已完成（tag `v4.0-phase1b-stable`）。
 
----
-
-### 子阶段 2.1：内容清洗（模块 E）
-
-#### 步骤 2.1.1 — 启用 cleaning Flag
-
-**操作**：`featureFlags.cleaning = true`。
-
-**验证**：
-- [ ] 右侧 260px 区域出现清洗面板
-- [ ] 面板含「全→半」ToggleButton + 「繁→简」ToggleButton
-- [ ] 搜索替换、撤回、导出仍不可见
-
-**通过后**: `git commit -m "step 2.1.1: enable cleaning flag"`
-
----
-
-#### 步骤 2.1.2 — 验证繁简转换
-
-**操作**：预览区含 "繁體中文"，点击「繁→简」。
-
-**验证**：
-- [ ] 文字转为 "繁体中文"
-- [ ] 按钮变灰色，文字变为「简→繁」，箭头 ←
-- [ ] 再次点击 → 恢复 "繁體中文"，按钮变蓝「繁→简」，箭头 →
-
-**通过后**: `git commit -m "step 2.1.2: verify traditional-simplified toggle"`
-
----
-
-#### 步骤 2.1.3 — 验证全角半角转换
-
-**操作**：预览区含 "ＡＢＣ"（全角），点击「全→半」。
-
-**验证**：
-- [ ] 文字转为 "ABC"
-- [ ] 按钮状态切换正确（灰底「半→全」）
-- [ ] 再次点击恢复 "ＡＢＣ"
-
-**通过后**: `git commit -m "step 2.1.3: verify fullwidth-halfwidth toggle"`
-
----
-
-#### 步骤 2.1.4 — 验证懒加载提示
-
-**操作**：**首次**点击繁简按钮（清空缓存后）。
-
-**验证**：
-- [ ] Toast「正在启动繁简引擎…」
-- [ ] 按钮显示 Spinner + disabled
-- [ ] 加载完成后自动执行转换
-
-**通过后**: `git commit -m "step 2.1.4: verify lazy-loading toasts"`
-
----
-
-### 子阶段 2.2：搜索替换（模块 M）
-
-#### 步骤 2.2.1 — 启用 searchReplace Flag
-
-**操作**：`featureFlags.searchReplace = true`。
-
-**验证**：
-- [ ] 清洗面板出现搜索框 + 替换框 + 「区分大小写」复选框 + 「替换」/「全部替换」按钮
-- [ ] 撤回、导出仍不可见
-
-**通过后**: `git commit -m "step 2.2.1: enable searchReplace flag"`
-
----
-
-#### 步骤 2.2.2 — 验证 Ctrl+H 唤起
-
-**操作**：按 Ctrl+H。
-
-**验证**：
-- [ ] 清洗面板搜索框获得焦点
-- [ ] 左侧面板切换为搜索结果（标题「搜索结果」）
-
-**通过后**: `git commit -m "step 2.2.2: verify Ctrl+H focus search"`
-
----
-
-#### 步骤 2.2.3 — 验证搜索高亮
-
-**操作**：预览区含 "Hello" 3 处，搜索 "Hello"。
-
-**验证**：
-- [ ] 预览区 3 处黄色高亮
-- [ ] 当前焦点项橙色高亮
-- [ ] 左侧面板显示 3 条搜索结果，每条含前后 15 字上下文
-- [ ] 搜索框右侧显示「第 1/3 个」
-
-**通过后**: `git commit -m "step 2.2.3: verify search highlighting"`
-
----
-
-#### 步骤 2.2.4 — 验证结果跳转
-
-**操作**：在搜索结果面板点击第 3 条结果。
-
-**验证**：
-- [ ] 预览区滚动并聚焦第 3 处匹配项
-- [ ] 焦点变为橙色
-
-**通过后**: `git commit -m "step 2.2.4: verify search result click-to-jump"`
-
----
-
-#### 步骤 2.2.5 — 验证逐个替换
-
-**操作**：搜索 "Hello"（3 处），点击「替换」2 次。
-
-**验证**：
-- [ ] 第 1 处替换为输入的内容，焦点跳至第 2 处
-- [ ] 第 2 处替换，焦点跳至第 3 处
-- [ ] 计数更新为「第 2/3 个」→「第 3/3 个」
-
-**通过后**: `git commit -m "step 2.2.5: verify replace one by one"`
-
----
-
-#### 步骤 2.2.6 — 验证全部替换
-
-**操作**：搜索 "Hello"（3 处），点击「全部替换」。
-
-**验证**：
-- [ ] 3 处全部替换
-- [ ] Toast「已替换 3 处」
-- [ ] 高亮消失
-
-**通过后**: `git commit -m "step 2.2.6: verify replace all"`
-
----
-
-#### 步骤 2.2.7 — 验证大小写 + 无匹配 + 面板恢复
-
-**操作**：
-- 预览含 "Hello" + "hello"，勾选「区分大小写」搜 "Hello" → 仅高亮 "Hello"
-- 搜索 "xyz"（不存在） → 面板显示「未找到匹配项」
-- 清空搜索框 → 面板恢复为连接点列表
-
-**验证**：三项全部通过。
-
-**通过后**: `git commit -m "step 2.2.7: verify case sensitive + no match + panel restore"`
-
----
-
-### 子阶段 2.3：撤回栈（模块 H）
-
-#### 步骤 2.3.1 — 启用 undoRedo Flag
-
-**操作**：`featureFlags.undoRedo = true`。
-
-**验证**：
-- [ ] 底部出现「↶ 撤回(0/5)」「↷ 重做」按钮
-- [ ] 导出按钮仍不可见
-
-**通过后**: `git commit -m "step 2.3.1: enable undoRedo flag"`
-
----
-
-#### 步骤 2.3.2 — 验证编辑撤回/重做
-
-**操作**：编辑预览区文本 → 按 Ctrl+Z。
-
-**验证**：
-- [ ] 恢复编辑前文本
-- [ ] 按钮显示「↶ 撤回(1/5)」
-- [ ] 按 Ctrl+Y → 恢复编辑后文本
-
-**通过后**: `git commit -m "step 2.3.2: verify edit undo/redo"`
-
----
-
-#### 步骤 2.3.3 — 验证清洗 + 替换可撤回
-
-**操作**：
-- 执行繁→简转换 → Ctrl+Z → 恢复原文
-- 执行全部替换 → Ctrl+Z → 恢复替换前文本
-
-**验证**：两项均可撤回。
-
-**通过后**: `git commit -m "step 2.3.3: verify cleaning + replace undoable"`
-
----
-
-#### 步骤 2.3.4 — 验证 5 步深度限制
-
-**操作**：连续执行 6 次不同操作（编辑/清洗/替换），按 Ctrl+Z 6 次。
-
-**验证**：
-- [ ] 前 5 次正常撤回
-- [ ] 第 6 次无效（已到栈底）
-
-**通过后**: `git commit -m "step 2.3.4: verify 5-step undo limit"`
-
----
-
-### 子阶段 2.4：导出（模块 J）
-
-#### 步骤 2.4.1 — 启用 exportFeature Flag
+### 步骤 2.1 — 启用 exportFeature Flag
 
 **操作**：`featureFlags.exportFeature = true`。
 
 **验证**：
-- [ ] 底部出现「⏎ 导出」+「↶ 还原」按钮
+- [ ] 底部出现「⏎ 导出」按钮
+- [ ] 无撤回/重做按钮、无清洗面板、无搜索框（E/M/H 已移除）
 
-**通过后**: `git commit -m "step 2.4.1: enable exportFeature flag"`
+**通过后**: `git commit -m "step 2.1: enable exportFeature flag"`
 
 ---
 
-#### 步骤 2.4.2 — 验证导出内容正确
+### 步骤 2.2 — 验证导出内容正确
 
 **操作**：点击「⏎ 导出」或按 Ctrl+S → 选择保存路径 → 打开导出的文件。
 
 **验证**：
 - [ ] 默认文件名 = `{第一个文件名}_merged.txt`
-- [ ] 编码为 UTF-8 with BOM
+- [ ] 编码为 UTF-8
 - [ ] 内容与预览区一致（连接标记不导出）
 - [ ] 换行为 `\r\n`
 
-**通过后**: `git commit -m "step 2.4.2: verify export content"`
+**通过后**: `git commit -m "step 2.2: verify export content"`
 
 ---
 
-#### 步骤 2.4.3 — 验证导出后撤回 + 还原
-
-**操作**：导出 → 按 Ctrl+Z。
-
-**验证**：
-- [ ] 仍可撤回（撤回栈未清空）
-- [ ] 点击「↶ 还原」→ 恢复至导出前快照
-
-**通过后**: `git commit -m "step 2.4.3: verify undo after export + revert button"`
-
----
-
-#### 步骤 2.4.4 — 验证空导出保护
+### 步骤 2.3 — 验证空导出保护
 
 **操作**：清空所有文件 → 点击导出。
 
@@ -681,11 +462,11 @@ git tag v4.0-phase1b-stable
 
 **通过后**:
 ```bash
-git commit -m "step 2.4.4: verify empty export protection"
+git commit -m "step 2.3: verify empty export protection"
 git tag v4.0-phase2-stable
 ```
 
-**里程碑**：全部 12 个模块功能验证通过。
+**里程碑**：全部保留模块功能验证通过（A, B, C, D, I, J, K, L）。
 
 ---
 
@@ -750,14 +531,27 @@ git tag v4.0-full-stable
 | 合并后丢字/多字 | 步骤 1b.2~1b.5 | `native/src/chain_merger.rs`, 后缀-前缀匹配算法 |
 | 连接点不显示 | 步骤 1b.6 | `ConnectionPointList.tsx`, Store 的 `connectionPoints` |
 | Minimap 色条覆盖不全 | 步骤 1b.9 | `Minimap.tsx`, N ≈ 容器高度/3 计算 |
-| 繁简转换无反应 | 步骤 2.1.2 | `cjkConv.ts`, 懒加载逻辑 |
-| 搜索不高亮 | 步骤 2.2.3 | `SearchReplace.tsx`, `mergedText` 索引计算 |
-| Ctrl+Z 不生效 | 步骤 2.3.2 | Store 的 `undoStack`/`pushSnapshot` |
-| 导出内容带连接标记 | 步骤 2.4.2 | `ExportButton.tsx`, 连接标记过滤逻辑 |
+| 导出内容带连接标记 | 步骤 2.2 | `ExportButton.tsx`, 连接标记过滤逻辑 |
 
 ---
 
-## 八、每日进度报告模板
+## 八、V4.0 功能边界说明
+
+> 以下功能**已从本软件移除**，移至独立项目「Text Unifier 内容工具」。如果代码中仍存在相关组件，应直接删除（不需要 Flag 包裹）：
+
+| 模块 | 原功能 | 处理方式 |
+|:---|:---|:---|
+| E | 繁简转换（ToggleButton） | 删除 `CleanPanel.tsx`, `ToggleButton.tsx` |
+| E | 全角半角转换 | 同上 |
+| M | 搜索替换（SearchReplace） | 删除 `SearchReplace.tsx` |
+| M | Ctrl+H 唤起 | 删除相关快捷键绑定 |
+| H | 撤回栈（UndoRedoButtons） | 删除 `UndoRedoButtons`，从 BottomToolbar 移除 |
+| H | Ctrl+Z/Y | 删除相关快捷键绑定 |
+| — | 预览区可编辑 | 预览区改为只读（`readOnly`），删除 `contentEditable` 逻辑 |
+
+---
+
+## 九、每日进度报告模板
 
 完成每天的工作后，用以下格式报告：
 
@@ -777,14 +571,23 @@ git tag v4.0-full-stable
 ### 当前 Flag 状态
 - diffViewer: true
 - mergeCore: false
-- cleaning: false
-- searchReplace: false
-- undoRedo: false
 - exportFeature: false
 
 ### Git 状态
 - 最后 tag: v4.0-phase0-stable
 - 未提交更改: 2 files
+```
+
+---
+
+## 十、Git Tag 路线图
+
+```
+v4.0-phase0-stable   ← 阶段 0 完成（共享基础设施：A 文件输入 + B 归一化）
+v4.0-phase1a-stable  ← 阶段 1a 完成（I 文档对比）
+v4.0-phase1b-stable  ← 阶段 1b 完成（B合并 + D预览 + C连接点 + L阈值）
+v4.0-phase2-stable   ← 阶段 2 完成（J 导出）
+v4.0-full-stable     ← 最终交付
 ```
 
 ---

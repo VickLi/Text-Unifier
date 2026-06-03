@@ -27,7 +27,7 @@ V4.0 核心数据模型从 V3.3 的**段落列表 + 勾选**改为**连续文本
 | IPC-02 | `detectEncoding` | `detect-encoding` | napi `detect_encoding()` | 单文件编码探测 | 无 |
 | IPC-03 | `exportFile` | `export-file` | Node.js fs + dialog | 导出 TXT 文件（连续文本，排除连接标记） | ✂️ 入参改为 string |
 | IPC-04 | `selectFiles` | `select-files` | Node.js dialog + fs | 文件选择对话框 | 无 |
-| ~~IPC-05~~ | ~~`scanPreprocessedTexts`~~ | ~~`scan-preprocessed-texts`~~ | — | ~~V3.3 段落级预处理~~ | ❌ 删除（CJK 转换纯前端完成） |
+| ~~IPC-05~~ | ~~`scanPreprocessedTexts`~~ | ~~`scan-preprocessed-texts`~~ | — | ~~V3.3 段落级预处理~~ | ❌ 删除（CJK 转换移至独立项目） |
 | ~~IPC-06~~ | ~~`formatDocument`~~ | ~~`format-document`~~ | — | ~~文档排版~~ | ❌ 删除 |
 
 ### 1.2 接口通用规范
@@ -162,7 +162,7 @@ window.electronAPI.getPathForFile(file);             // sync
 
 ~~#### 1.3.3 IPC-03: `scanPreprocessedTexts` — 已删除~~ 
 
-> V3.3 的 `scanPreprocessedTexts` 通道已删除。CJK 转换（繁简/全半角）在 V4.0 中完全在纯前端完成，操作 `mergedText` 字符串后直接更新预览区，无需通过 IPC。
+> V3.3 的 `scanPreprocessedTexts` 通道已删除。CJK 转换（繁简/全半角）已移至独立项目「Text Unifier 内容工具」。
 
 ---
 
@@ -348,7 +348,7 @@ const action = useStore((s) => s.actionName);
 | :--- | :--- | :--- | :--- |
 | `addFiles` | `(files: File[]) => Promise<void>` | 添加文件，去重 + 格式校验 | 无 |
 | `removeFile` | `(path: string) => void` | 移除指定路径的文件 | 无 |
-| `clearFiles` | `() => void` | 清空所有文件 + 撤回栈 | 无 |
+| `clearFiles` | `() => void` | 清空所有文件 | 无 |
 | `reorderFiles` | `(from: number, to: number) => void` | 拖拽排序 → 触发重新合并 | 无 |
 
 #### 3.2.2 合并引擎 Actions
@@ -365,30 +365,17 @@ const action = useStore((s) => s.actionName);
 | :--- | :--- | :--- | :--- |
 | `toggleConnectionMerge` | `(cpId: string) => void` | 切换连接点的合并/保留状态 → 预览区即时更新 → debounced 500ms 入栈 | ⭐ 新增 |
 
-#### 3.2.4 内容清洗 Actions
+#### 3.2.4 内容清洗 Actions（已移除）
 
-| Action | 签名 | 说明 | V4.0 变更 |
-| :--- | :--- | :--- | :--- |
-| `toggleFullWidth` | `() => Promise<void>` | 全角↔半角双向切换 | 保留（改为操作 mergedText 字符串） |
-| `toggleTraditional` | `() => Promise<void>` | 繁↔简双向切换（懒加载引擎） | 保留（改为操作 mergedText 字符串） |
+> 模块 E（繁简/全角转换）已移至独立项目「Text Unifier 内容工具」。相关 Actions（`toggleFullWidth`, `toggleTraditional`）已删除。
 
-#### 3.2.5 搜索替换 Actions（★ 新增）
+#### 3.2.5 搜索替换 Actions（已移除）
 
-| Action | 签名 | 说明 | V4.0 变更 |
-| :--- | :--- | :--- | :--- |
-| `performSearch` | `(keyword: string) => void` | 搜索 mergedText → searchResults[] → 左侧面板切换为搜索结果 | ⭐ 新增 |
-| `replaceOne` | `() => void` | 替换当前焦点匹配项 → 跳至下一项 → 入栈 | ⭐ 新增 |
-| `replaceAll` | `() => void` | 全部替换 → Toast「已替换 N 处」→ 入栈 | ⭐ 新增 |
-| `clearSearch` | `() => void` | 清空搜索 → 左侧面板恢复为连接点列表 | ⭐ 新增 |
+> 模块 M（搜索替换）已移至独立项目「Text Unifier 内容工具」。相关 Actions（`performSearch`, `replaceOne`, `replaceAll`, `clearSearch`）已删除。
 
-#### 3.2.6 撤回栈 Actions
+#### 3.2.6 撤回栈 Actions（已移除）
 
-| Action | 签名 | 说明 | V4.0 变更 |
-| :--- | :--- | :--- | :--- |
-| `pushSnapshot` | `(reason?: string) => void` | 深拷贝 mergedText + connectionStates + modifiedFlags 入栈 | ✂️ 快照内容从段落模型改为连续文本模型 |
-| `undo` | `() => void` | 撤回（undoPointer-- → 恢复快照） | ✂️ 同上 |
-| `redo` | `() => void` | 重做（undoPointer++ → 恢复快照） | 无 |
-| `clearUndoStack` | `() => void` | 清空撤回栈 | 无 |
+> 模块 H（撤回栈）已移至独立项目「Text Unifier 内容工具」。相关 Actions（`pushSnapshot`, `undo`, `redo`, `clearUndoStack`）已删除。V4.0 预览区为只读，无需撤回操作。
 
 #### 3.2.7 对比 Actions
 
@@ -421,26 +408,6 @@ interface AppState {
     analyzeError: string | null;
     overlapThreshold: number;                 // 重叠阈值（默认50）
 
-    // === 搜索替换 ===
-    searchKeyword: string;
-    replaceText: string;
-    caseSensitive: boolean;
-    searchResults: SearchResult[];
-    currentMatchIndex: number;
-    isSearching: boolean;
-
-    // === 清洗状态 ===
-    isFullWidthConverted: boolean;
-    isTraditionalConverted: boolean;
-
-    // === 撤回栈 ===
-    undoStack: Snapshot[];
-    undoPointer: number;
-    lastExportSnapshot: Snapshot | null;
-
-    // === 文本修改追踪 ===
-    modifiedFlags: Set<string>;
-
     // === 对比 ===
     diffAlignment: DiffAlignment[];
 
@@ -465,7 +432,7 @@ interface AppState {
 | `deselectAllParagraphs` | ❌ 删除 | （无） |
 | `batchToggleParagraphCheck` | ❌ 删除 | （无） |
 | `setAnalysisResult` | ❌ 删除 | `setMergeResult` |
-| `scanPreprocessedTexts` 流程 | ❌ 删除 | CJK 转换纯前端完成 |
+| `scanPreprocessedTexts` 流程 | ❌ 删除 | CJK 转换移至独立项目 |
 | — | ⭐ 新增 | `runMerge`, `setOverlapThreshold` |
 | — | ⭐ 新增 | `performSearch`, `replaceOne`, `replaceAll`, `clearSearch` |
 
@@ -525,14 +492,7 @@ interface AppState {
 | ~~`scanFiles`~~ | — | — | ❌ 删除 |
 | ~~`scanPreprocessedTexts`~~ | — | — | ❌ 删除 |
 
-### 4.2 `src/utils/cjkConv.ts`（V4.0 保留）
-
-| 函数 | 签名 | 说明 | V4.0 变更 |
-| :--- | :--- | :--- | :--- |
-| `toSimplified` | `(text: string) => Promise<string>` | 繁→简转换（懒加载引擎） | 无 |
-| `toTraditional` | `(text: string) => Promise<string>` | 简→繁转换（懒加载引擎） | 无 |
-
-### 4.3 `src/utils/diffUtils.ts`（V4.0 保留）
+### 4.2 `src/utils/diffUtils.ts`（V4.0 保留）
 
 | 函数 | 签名 | 说明 | V4.0 变更 |
 | :--- | :--- | :--- | :--- |
@@ -575,16 +535,16 @@ let nativeModule: any;
 | :--- | :--- | :--- | :--- |
 | **IPC** | ⭐ 新增 | `merge-files` 通道 | V4.0 链式重叠合并核心接口 |
 | **IPC** | ❌ 删除 | `scan-files` 通道 | 被 merge-files 替代 |
-| **IPC** | ❌ 删除 | `scan-preprocessed-texts` 通道 | CJK 转换改为纯前端 |
+| **IPC** | ❌ 删除 | `scan-preprocessed-texts` 通道 | CJK 转换移至独立项目 |
 | **IPC** | ❌ 删除 | `format-document` 通道 | 排版增强移除 |
 | **Rust napi** | ⭐ 新增 | `merge_files()` 函数 + `chain_merger.rs` | V4.0 核心引擎 |
 | **Rust napi** | ❌ 删除 | `scan_files()` / `scan_preprocessed_texts()` / `format_document()` | 被替代或废弃 |
 | **Store** | ⭐ 新增 | `runMerge` / `setMergeResult` / `setOverlapThreshold` | 合并引擎 Actions |
-| **Store** | ⭐ 新增 | `performSearch` / `replaceOne` / `replaceAll` / `clearSearch` | 搜索替换 Actions（PRD M） |
 | **Store** | ⭐ 新增 | `toggleConnectionMerge` | 连接点控制 Action |
-| **Store** | ❌ 删除 | `toggleParagraphCheck` / `toggleGroupCheckV2` / `selectAllParagraphs` / `deselectAllParagraphs` / `batchToggleParagraphCheck` | 段落勾选模型移除 |
-| **Store** | ❌ 删除 | `duplicateGroups` / `previewParagraphs` / `paragraphCheckedMap` | 段落模型字段移除 |
-| **Store** | ❌ 删除 | `formatOptions` / `chapterList` / `cleanOptions.stripArtifacts` 等 | 废弃模块移除 |
+| **Store** | ❌ 删除 | `toggleFullWidth` / `toggleTraditional` / `performSearch` / `replaceOne` / `replaceAll` / `clearSearch` / `pushSnapshot` / `undo` / `redo` / `clearUndoStack` | E/H/M 模块移除 |
+| **Store** | ❌ 删除 | `searchKeyword` / `isFullWidthConverted` / `isTraditionalConverted` / `undoStack` / `undoPointer` / `lastExportSnapshot` / `modifiedFlags` 等 | E/H/M 字段移除 |
+| **Store** | ❌ 删除 | `duplicateGroups` / `previewParagraphs` / `paragraphCheckedMap` | 段落模型 → 连续文本+连接点 |
+| **Utils** | ❌ 删除 | `cjkConv.ts` | E 模块移除 |
 | **Store** | ✂️ 精简 | `cleanOptions`（JSON 内容） | 移除 3 个子字段 |
 | **Preload** | ❌ 删除 | `formatDocument` 方法 | 排版增强移除 |
 | **Main** | ❌ 删除 | `format-document` IPC handler | 同上 |

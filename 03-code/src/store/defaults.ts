@@ -11,7 +11,6 @@ export const DEFAULT_CLEAN_OPTIONS: CleanOptions = {
 // V3.2 新增默认值（V4.0 保留）
 export const DEFAULT_V3_2_STATE = {
   activeMode: 'merge' as const,
-  isEditing: false,
   undoStack: [] as any[],
   undoPointer: -1,
   isDragOverlayVisible: false,
@@ -21,11 +20,6 @@ export const DEFAULT_V3_2_STATE = {
   diffRightFileName: null as string | null,
 };
 
-// V3.3 新增默认值（V4.0 精简：移除关键词搜索字段）
-export const DEFAULT_V3_3_STATE = {
-  isFullWidthConverted: false,
-  isTraditionalConverted: false,
-};
 
 // V4.0 新增默认值（链式重叠合并 + 搜索替换模型）
 export const DEFAULT_V4_0_STATE = {

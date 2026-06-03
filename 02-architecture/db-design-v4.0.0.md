@@ -47,7 +47,7 @@ erDiagram
     }
 
     SESSIONS ||--o{ CACHE : "通过 file_paths 关联"
-    USER_PREFERENCES ||--|| SESSIONS : "overlap_threshold / is_fullwidth_converted / is_traditional_converted 恢复会话状态"
+    USER_PREFERENCES ||--|| SESSIONS : "overlap_threshold / active_mode 恢复会话状态"
 ```
 
 ---
@@ -127,11 +127,11 @@ async function computeCacheKey(filePaths: string[]): Promise<string> {
 
 | key | 类型 | 默认值 | 说明 | V4.0 变更 |
 | :--- | :--- | :--- | :--- | :--- |
-| `is_fullwidth_converted` | `boolean` | `false` | 全角→半角双向切换状态 | 保留 |
-| `is_traditional_converted` | `boolean` | `false` | 繁→简双向切换状态 | 保留 |
 | `overlap_threshold` | `number` | `50` | 重叠阈值（范围 10~500） | ⭐ 新增（PRD L2） |
 | `connection_list_width` | `number` | `280` | 连接点列表面板宽度（px） | ✂️ 重命名 |
 | `active_mode` | `string` | `'merge'` | 上次使用的模式（`'merge'`/`'compare'`） | 保留 |
+| ~~`is_fullwidth_converted`~~ | — | — | ~~V3.3 全角转换状态~~ | ❌ E 模块移除 |
+| ~~`is_traditional_converted`~~ | — | — | ~~V3.3 繁简转换状态~~ | ❌ E 模块移除 |
 | ~~`duplicate_list_width`~~ | — | — | ~~V3.3 重复列表面板宽度~~ | ❌ 删除 |
 
 ---
@@ -182,7 +182,7 @@ flowchart TD
     CHECK -->|否| NEW["创建新会话<br/>session_id = uuid()"]
     CHECK -->|是| LATEST["取 updated_at 最新的会话"]
     LATEST --> RESTORE["反序列化 JSON 字段：<br/>file_paths → sortedFileList<br/>merged_text → mergedText<br/>connection_points → connectionPoints<br/>connection_states → connectionStates"]
-    RESTORE --> PREF["读取 user_preferences：<br/>overlap_threshold → Store<br/>is_fullwidth_converted → Store<br/>is_traditional_converted → Store<br/>active_mode → Store<br/>connection_list_width → Store"]
+    RESTORE --> PREF["读取 user_preferences：<br/>overlap_threshold → Store<br/>active_mode → Store<br/>connection_list_width → Store"]
     PREF --> STATE["恢复完整应用状态<br/>用户看到上次离开时的界面"]
     NEW --> IDLE["显示空状态欢迎界面"]
 ```

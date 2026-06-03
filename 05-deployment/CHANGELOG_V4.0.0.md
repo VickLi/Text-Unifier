@@ -1,7 +1,7 @@
 # 📋 Text Unifier 版本更新记录
 
-> **版本**: V4.0.0（项目重构版）
-> **发布日期**: 2026-05-22
+> **版本**: V4.0.0（项目重构版 — 最终稳定版）
+> **发布日期**: 2026-06-03
 > **上一版本**: V3.3 (2026-05-21)
 
 ---
@@ -27,8 +27,9 @@
 |:----|:----:|:----:|:------|
 | F. 章节工具 | ✅ | ❌ | 章节识别/排序/提取全部移除 |
 | G. 排版增强 | ✅ | ❌ | 段落合并/拆分/诗歌检测/列表识别全部移除 |
-| E. 内容清洗 | 复杂 | 精简 | 仅保留繁简转换 + 全半角转换；移除广告过滤/行尾数字 |
-| M. 搜索替换 | ❌ | ⭐ 新增 | Ctrl+H 高亮搜索 + 逐个/全部替换 |
+| E. 内容清洗 | ✅ | ❌ | 繁简转换、全半角转换 → 移至独立项目「Text Unifier 内容工具」 |
+| M. 搜索替换 | ❌ | ❌ | 移至独立项目「Text Unifier 内容工具」 |
+| H. 撤回栈 | ✅ | ❌ | 移至独立项目「Text Unifier 内容工具」（预览区改为只读） |
 
 ### 🚀 新增功能
 
@@ -36,32 +37,30 @@
 |:----|:--------:|:------|
 | 链式重叠合并 | B3-B9 | 字符级最长后缀-前缀匹配 |
 | 连接点列表 | C1-C9 | 展示文件间重叠信息 + 切换合并/保留 |
-| 连续文本预览 | D1-D10 | 替代段落列表，可编辑 + 连接标记 |
-| 搜索替换 | M1-M8 | 高亮搜索、逐个/全部替换、结果面板 |
-| 合并设置 | L1-L3 | 重叠阈值配置 + 持久化 |
+| 连续文本预览 | D1-D10 | 替代段落列表，只读 + 连接标记 + Minimap |
+| 合并设置 | L1-L3 | 重叠阈值配置（10~500，步长10）+ 持久化 |
 | 全窗口拖拽遮罩 | A4 | 蓝/红色遮罩视觉反馈 |
+| 连接标记可视化 | D4 | 灰色虚线=自动合并，蓝色虚线=待确认 |
 
-### 🐛 Bug 修复（6/6 = 100%）
+### 🐛 Bug 修复（全部 26 个 100% 修复）
 
 | ID | 级别 | 模块 | 问题 |
 |:---|:----:|:----|:-----|
-| BUG-V4.0-001 | 🔴 P0 | Store-导出 | `exportMergedText` 中 `defaultName` 变量未定义 |
-| BUG-V4.0-002 | 🔴 P0 | Store-撤回 | `revertToExport` 末尾语法错误 |
-| BUG-V4.0-003 | 🔴 P0 | 文档对比 | `DiffViewer` 使用编码名而非文件内容 |
-| BUG-V4.0-004 | 🔴 P0 | 搜索替换 | `PreviewPanel` 搜索高亮未渲染 |
-| BUG-V4.0-005 | 🟡 P1 | Store-导出 | `revertToExport` 残留 `err` 变量 |
-| BUG-V4.0-006 | 🟡 P1 | 连接点列表 | 空状态逻辑错误 |
+| BUG-V4.0-001~004 | 🔴 P0 | 各处 | 4 个严重 Bug（导出/撤回/对比/搜索） |
+| BUG-V4.0-005~006 | 🟡 P1 | 各处 | 2 个中危 Bug |
+| BUG-V4.0-007~026 | 🟢 P2 | 各处 | 20 个低危 Bug（含增量集成阶段） |
 
 ### 🔧 工程变更
 
 | 类别 | 变更 |
 |:----|:------|
-| **Rust 模块** | 移除 `document_formatter.rs`；新增 `chain_merger.rs`（链式重叠合并引擎） |
+| **Rust 模块** | 移除 `document_formatter.rs`、`duplicate_resolver.rs`、`file_processor.rs`、`paragraph_index.rs`；新增 `chain_merger.rs`（链式重叠合并引擎） |
 | **IPC 通道** | 移除 `scan-preprocessed-texts`、`format-document`；新增 `merge-files` |
-| **Store 瘦身** | 移除 12 字段 + 7 Actions（精简至 26 字段） |
+| **Store 瘦身** | 移除 12 字段 + 7 Actions；最终移除 E/M/H 相关字段（`toggleFullWidth`/`toggleTraditional`/`isEditing`/`isConverting` 等） |
+| **组件重构** | 移除 `CleanPanel`/`SearchReplace`/`ToggleButton`/`DuplicateList`/`PreviewParagraph`/`ParagraphIndicator` 等；新建 `ConnectionPointList`/`ConnectionPointItem`/`ConnectionMarker`/`MergeSettings` |
 | **数据库** | IndexedDB v5 → v6：新增 `merged_text`/`connection_points`/`connection_states` |
-| **依赖** | 移除 `js-opencc`（繁简转换改为内联字典） |
-| **前端组件** | 移除 `ChapterPanel`、`FormatPanel`、`KeywordSearchBar`、`SidePanel` |
+| **依赖** | 移除 `js-opencc`（繁简转换内联字典 → 移至内容工具项目） |
+| **Feature Flag** | 经历 4 阶段增量集成后完全移除，代码不再依赖条件编译 |
 
 ### ✅ 构建验证
 
@@ -70,17 +69,19 @@
 | Rust 单元测试 | ✅ 17/17 通过 |
 | TypeScript 编译（前端） | ✅ 零错误 |
 | TypeScript 编译（Electron） | ✅ 零错误 |
-| Vite 构建 | ✅ 67 模块构建成功 |
+| Vite 构建 | ✅ 66 模块构建成功（241.79 KB JS + 28 KB CSS） |
 | napi-rs 原生模块编译（Release） | ✅ 成功 |
-| PRD 功能点覆盖率 | ~96%（61/64） |
+| PRD 核心功能点覆盖率 | ✅ ~100%（A/B/C/D/I/J/L） |
+| 增量集成回归测试 | ✅ 全量通过 |
 
-### 📦 部署包
+### 📦 可部署包
 
-| 文件 | 说明 |
-|:----|:------|
-| `TextUnifier_Portable_v4.0.0.zip` | 便携版（解压即用） |
-| `installer/安装程序.cmd` | 安装脚本（管理员运行） |
-| `installer/卸载程序.cmd` | 卸载脚本（管理员运行） |
+| 类型 | 位置 | 说明 |
+|:----|:------|:------|
+| 便携版 ZIP | `05-deployment/portable/TextUnifier_Portable_v4.0.0.zip` | 解压即用（Win x64） |
+| 便携版目录 | `05-deployment/portable/TextUnifier_Portable_v4.0.0/` | 免安装运行 |
+| 安装脚本 | `05-deployment/installer/安装程序.cmd` | 管理员运行 |
+| 卸载脚本 | `05-deployment/installer/卸载程序.cmd` | 管理员运行 |
 
 ### 📄 文档清单
 

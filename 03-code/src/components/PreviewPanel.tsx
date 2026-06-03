@@ -17,9 +17,7 @@ export const PreviewPanel: React.FC = () => {
   const mergedText = useStore((s) => s.mergedText);
   const status = useStore((s) => s.status);
   const isAnalyzing = useStore((s) => s.isAnalyzing);
-  const isEditing = useStore((s) => s.isEditing);
-  const toggleEditing = useStore((s) => s.toggleEditing);
-  const pushSnapshot = useStore((s) => s.pushSnapshot);
+  // V4.0: 预览区只读（E/M/H 已移除）
   const exportMergedText = useStore((s) => s.exportMergedText);
 
   const minimapItems = useStore((s) => s.minimapItems);
@@ -32,9 +30,7 @@ export const PreviewPanel: React.FC = () => {
 
   const sortedFileList = useStore((s) => s.sortedFileList);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const preRef = useRef<HTMLPreElement>(null);
-  const [localText, setLocalText] = useState(mergedText);
 
   // 悬停来源 Tooltip 状态
   const [hoverInfo, setHoverInfo] = useState<{ visible: boolean; content: string[]; position: { x: number; y: number } | null }>({
@@ -54,9 +50,8 @@ export const PreviewPanel: React.FC = () => {
     setHoverInfo({ visible: false, content: [], position: null });
   }, []);
 
-  // 同步外部 mergedText 变更到本地 + 更新 Minimap
+  // 同步 mergedText 变更 → 更新 Minimap
   useEffect(() => {
-    setLocalText(mergedText);
     updateMinimap();
   }, [mergedText, updateMinimap]);
 
@@ -71,20 +66,7 @@ export const PreviewPanel: React.FC = () => {
     return () => window.removeEventListener('keydown', handler);
   }, [exportMergedText]);
 
-  const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setLocalText(e.target.value);
-  }, []);
-
-  // blur 时入栈 + 同步到 store
-  const handleBlur = useCallback(() => {
-    if (localText !== mergedText) {
-      pushSnapshot('手动编辑');
-      // 直接更新 store 中的 mergedText
-      useStore.setState({ mergedText: localText });
-    }
-  }, [localText, mergedText, pushSnapshot]);
-
-  // 渲染文本区域（BUG-1修复：使用 \n 实际换行；BUG-5修复：不显示连接标记列表）
+  // 渲染文本区域（BUG-1修复：使用 \n 实际换行）
   /** 构建带连接标记的渲染内容（与 toggleConnectionMerge 算法一致） */
   const renderWithMarkers = () => {
     if (!fileContents || fileContents.length === 0) {
@@ -185,21 +167,7 @@ export const PreviewPanel: React.FC = () => {
   const renderContent = () => {
     if (!mergedText) return null;
 
-    if (isEditing) {
-      return (
-        <textarea
-          ref={textareaRef}
-          value={localText}
-          onChange={handleTextChange}
-          onBlur={handleBlur}
-          className="w-full h-full min-h-[300px] p-4 text-sm font-sans leading-relaxed resize-none border-0 outline-none focus:ring-0"
-          placeholder="在此编辑合并后的文本..."
-          spellCheck={false}
-        />
-      );
-    }
-
-    // 阅读模式：渲染带连接标记的文本
+    // 只读模式：渲染带连接标记的文本
     return (
       <div className="w-full h-full overflow-y-auto p-4" data-preview-container>
         {renderWithMarkers()}
@@ -241,16 +209,6 @@ export const PreviewPanel: React.FC = () => {
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium text-gray-700">最终文档预览</h3>
-          <button
-            onClick={toggleEditing}
-            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
-              isEditing
-                ? 'bg-blue-50 border-blue-300 text-blue-600'
-                : 'border-gray-200 text-gray-400 hover:border-gray-300'
-            }`}
-          >
-            {isEditing ? '📖 阅读' : '✏️ 编辑'}
-          </button>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400">{lineCount} 行 · {charCount.toLocaleString()} 字符</span>

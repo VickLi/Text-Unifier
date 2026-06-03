@@ -7,11 +7,8 @@ import { ModeTabs } from './components/ModeTabs';
 import { ConnectionPointList } from './components/ConnectionPointList';
 import { PreviewPanel } from './components/PreviewPanel';
 import { ExportButton } from './components/ExportButton';
-import { CleanPanel } from './components/CleanPanel';
 import { DiffViewer } from './components/DiffViewer';
 import { MergeSettings } from './components/MergeSettings';
-import type { ToastMessage } from './types';
-
 const SCAN_TIMEOUT_MS = 60000;
 
 const App: React.FC = () => {
@@ -154,13 +151,6 @@ const App: React.FC = () => {
           <section className="flex-1 min-w-0 bg-white border border-gray-200 rounded-xl p-3 overflow-hidden mr-3" aria-label="最终文档预览">
             <PreviewPanel />
           </section>
-
-          {/* 右侧：内容清洗面板 */}
-          {status === 'ready' && (
-            <section className="w-[220px] lg:w-[260px] shrink-0 bg-white border border-gray-200 rounded-xl p-3 overflow-y-auto" aria-label="内容清洗">
-              <CleanPanel />
-            </section>
-          )}
         </main>
       )}
 

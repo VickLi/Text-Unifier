@@ -11,9 +11,9 @@
 
 ## 重要声明
 
-V4.0 是对 V3.3 的**项目重构**——删除章节工具模块（F）和排版增强模块（G），内容清洗精简为繁简转换 + 全角半角转换。**桌面框架最终确定为 Electron 31**（经 Tauri 2.x Demo 实证评估，详见 `tech-decision-report-v4.0.0.md`）。
+V4.0 是对 V3.3 的**项目重构**——删除章节工具模块（F）和排版增强模块（G）；模块 E(内容清洗)、M(搜索替换)、H(撤回栈) 移至独立项目「Text Unifier 内容工具」。预览区改为只读。**桌面框架最终确定为 Electron 31**（经 Tauri 2.x Demo 实证评估，详见 `tech-decision-report-v4.0.0.md`）。
 
-去重引擎（B）、预览区（D）、撤回栈（H）、文档对比（I）、导出（J）模块 100% 保留，零逻辑变更。
+去重引擎（B）、预览区（D）、连接点列表（C）、文档对比（I）、导出（J）模块保留并重构。
 
 ---
 
@@ -53,9 +53,8 @@ graph TB
             subgraph "合并去重模式（Merge Mode）"
                 CHIP["FileChipBar（40px 芯片栏）"]
                 CP["ConnectionPointList（280px 连接点面板）"]
-                PREV["PreviewPanel（min-w-55% 预览区，连续文本可编辑）"]
+                PREV["PreviewPanel（min-w-55% 预览区，连续文本只读）"]
                 MINIMAP["Minimap（30px 缩略图）"]
-                CLEAN["CleanPanel（260px 内容清洗）"]
             end
 
             subgraph "文档对比模式（Compare Mode）"
@@ -63,7 +62,7 @@ graph TB
                 DIFFSTAT["DiffStats（底部统计栏）"]
             end
 
-            TOOL["BottomToolbar（撤回/重做 + 状态栏 + 导出）"]
+            TOOL["BottomToolbar（状态栏 + 导出）"]
             STORE["Zustand Store（V4.0 精简版，26 字段）"]
             IPC_CLIENT["src/utils/ipc.ts<br/>merge-files / detect-encoding / export-file / select-files"]
 
@@ -72,7 +71,6 @@ graph TB
             APP --> CHIP
             APP --> CP
             APP --> PREV
-            APP --> CLEAN
             APP --> DIFF
             APP --> TOOL
             PREV --> MINIMAP
@@ -144,16 +142,15 @@ flowchart LR
 | B | 去重合并引擎 | ✂️ 裁减+新增 | 移除 `format_document` napi；新增链式重叠合并 |
 | C | 连接点列表 | ⭐ 重构 | V3.3"重复段落列表"重构为"连接点列表"，展示文件间重叠信息 + ToggleSwitch |
 | D | 预览区 | ⭐ 重构 | 从段落列表改为连续文本 + 连接标记；保留 Minimap/溯源 |
-| E | 内容清洗 | ✂️ 精简+新增 | 保留繁简+全半角 ToggleButton；**新增搜索替换区**（PRD M1-M8） |
-| H | 撤回栈 | ✅ 保留 | 无变更（快照内容改为 mergedText + connectionStates + modifiedFlags） |
 | I | 文档对比 | ✅ 保留 | 无变更 |
-| J | 导出 | ✅ 保留 | 无变更（导出内容改为预览区完整文本，排除连接标记） |
+| J | 导出 | ✅ 保留 | 导出内容改为预览区完整文本（排除连接标记） |
 | K | 平台与兼容性 | ✅ 保留 | 无变更 |
 | L | 合并设置 | ⭐ 新增 | 重叠阈值配置（默认50，范围10~500）+ 持久化 |
-| M | 搜索替换 | ⭐ 新增 | Ctrl+H 唤起、关键词高亮、逐个/全部替换、结果面板覆盖连接点列表 |
+| ~~E~~ | ~~内容清洗~~ | ❌ 移除 | 繁简/全角转换 → 移至独立项目「Text Unifier 内容工具」 |
 | ~~F~~ | ~~章节工具~~ | ❌ 删除 | 章节识别/排序/提取 |
 | ~~G~~ | ~~排版增强~~ | ❌ 删除 | 段落合并/拆分/诗歌检测/列表识别 |
-| ~~V3.3-旧~~ | ~~旧版关键词搜索~~ | ❌ 删除 | V3.3 搜索后删除行；V4.0 以全新模块 M 替代 |
+| ~~H~~ | ~~撤回栈~~ | ❌ 移除 | 5步撤回/Ctrl+Z/Y → 移至独立项目「Text Unifier 内容工具」 |
+| ~~M~~ | ~~搜索替换~~ | ❌ 移除 | Ctrl+H/高亮/替换 → 移至独立项目「Text Unifier 内容工具」 |
 
 ### 3.2 模块 A：文件输入与排序（100% 保留）
 
@@ -200,64 +197,33 @@ native/src/
 
 | 属性 | 说明 |
 | :--- | :--- |
-| **职责** | 连续文本可编辑区 + 连接标记 + **Minimap 缩略图**（30px 宽，色条数 N ≈ 容器高度/3 动态计算，等比例压缩全文高度，点击跳转 `scrollTop = 全文高度 × (i/N)`）+ 悬停溯源 Tooltip |
+| **职责** | 连续文本**只读**展示区 + 连接标记 + **Minimap 缩略图**（30px 宽，色条数 N ≈ 容器高度/3 动态计算，等比例压缩全文高度，点击跳转 `scrollTop = 全文高度 × (i/N)`）+ 悬停溯源 Tooltip |
 | **源文件** | `PreviewPanel.tsx`, `ConnectionMarker.tsx`, `Minimap.tsx`, `Tooltip.tsx` |
 | **依赖模块** | Store（`mergedText`, `connectionPoints`, `connectionStates`） |
-| **对外接口** | 文本编辑 blur 入栈、连接标记处「切断」/「连接」按钮、Minimap 点击跳转 |
-| **V4.0 变更** | ⭐ 从段落列表展示改为**连续文本**展示；连接标记（灰色虚线=自动合并，蓝色虚线=待确认）替代段落指示器；连接标记处提供切断/连接交互；连接标记不可编辑、导出时不写入 |
+| **对外接口** | 连接标记处「切断」/「连接」按钮、Minimap 点击跳转、SourceTooltip 悬停 |
+| **V4.0 变更** | ⭐ 从段落列表展示改为**连续文本只读**展示；连接标记（灰色虚线=自动合并，蓝色虚线=待确认）替代段落指示器；连接标记处提供切断/连接交互；连接标记不可编辑、导出时不写入 |
 
-### 3.6 模块 E：内容清洗（精简 + 新增搜索替换）
-
-| 属性 | 说明 |
-| :--- | :--- |
-| **职责** | 繁简双向转换 + 全角半角双向转换 + **搜索替换**（PRD M1-M8 实现在此面板内） |
-| **源文件** | `CleanPanel.tsx`, `ToggleButton.tsx`, `SearchReplace.tsx`（V4.0 新建） |
-| **依赖模块** | Store（`isFullWidthConverted`, `isTraditionalConverted`, `searchKeyword`, `replaceText`, `caseSensitive`, `searchResults`, `currentMatchIndex`, `isSearching`）, `src/utils/cjkConv.ts` |
-| **对外接口** | `toggleFullWidth()`, `toggleTraditional()`, `performSearch()`, `replaceOne()`, `replaceAll()`, `clearSearch()` |
-| **V4.0 变更** | ✂️ 移除 V3.3 的 `KeywordSearchBar`（旧版：搜索后删除行）+ `stripNovelArtifacts` + `filterMaxLength`；⭐ 新增 `SearchReplace`（新版：高亮搜索 + 逐个/全部替换 + 结果面板覆盖连接点列表）；CleanPanel 从上到下：ToggleButton(全角) + ToggleButton(繁简) + 分隔线 + SearchReplace |
-
-#### 3.6.1 CleanPanel 精简对比
-
-| V3.3 | V4.0 |
-| :--- | :--- |
-| ToggleButton（全角↔半角） | ToggleButton（全角↔半角）✅ 保留 |
-| ToggleButton（繁简） | ToggleButton（繁简）✅ 保留 |
-| KeywordSearchBar（搜索+删除行） | ❌ 移除（旧版：匹配后删除） |
-| — | ⭐ **SearchReplace（新版：高亮+替换）** — PRD M1-M8 |
-| stripNovelArtifacts 选项 | ❌ 移除 |
-| filterMaxLength 选项 | ❌ 移除 |
-
-### 3.7 模块 H：撤回栈（100% 保留）
-
-| 属性 | 说明 |
-| :--- | :--- |
-| **职责** | 5 步 FIFO 撤回栈，Ctrl+Z/Y，还原至导出前快照 |
-| **源文件** | Store（`undoStack`, `undoPointer`, `pushSnapshot`, `undo`, `redo`, `clearUndoStack`） |
-| **依赖模块** | 无外部依赖，纯 Store 逻辑 |
-| **对外接口** | `pushSnapshot(reason?)`, `undo()`, `redo()`, `clearUndoStack()` |
-| **V4.0 变更** | **无** |
-
-### 3.8 模块 I：文档对比（100% 保留）
+### 3.6 模块 I：文档对比（100% 保留）
 
 | 属性 | 说明 |
 | :--- | :--- |
 | **职责** | 双栏段落对比、LCS 对齐、四色渲染、词级差异高亮、同步滚动、统计栏 |
 | **源文件** | `DiffViewer.tsx`, `src/utils/diffUtils.ts` |
-| **依赖模块** | Store（`diffAlignment`, `setDiffResult`, `activeMode`） |
+| **依赖模块** | Store（`diffAlignment`, `activeMode`） |
 | **对外接口** | 模式切换 Tab 触发对比计算，仅支持 2 文件 |
 | **V4.0 变更** | **无** |
 
-### 3.10 模块 J：导出（100% 保留）
+### 3.7 模块 J：导出（V4.0 适配）
 
 | 属性 | 说明 |
 | :--- | :--- |
-| **职责** | 导出纯净 .txt（UTF-8 BOM, CRLF），预览区完整文本（排除连接标记），Ctrl+S 快捷键 |
+| **职责** | 导出纯净 .txt（UTF-8, CRLF），预览区完整文本（排除连接标记），Ctrl+S 快捷键 |
 | **源文件** | `ExportButton.tsx`, IPC（`exportFile`） |
 | **依赖模块** | Store（`mergedText`, `connectionPoints`）, Electron Main Process（dialog + fs） |
 | **对外接口** | `exportMergedText()` → 排除连接标记 → IPC `export-file` |
 | **V4.0 变更** | ✂️ 入参从段落数组改为连续文本字符串；导出内容从"仅已勾选段落"改为"完整文本排除连接标记"（PRD J2） |
 
-### 3.11 模块 L：合并设置（V4.0 新增）
+### 3.8 模块 L：合并设置（V4.0 新增）
 
 | 属性 | 说明 |
 | :--- | :--- |
@@ -267,15 +233,13 @@ native/src/
 | **对外接口** | `setOverlapThreshold(t)` → 更新阈值 → 触发重新合并 |
 | **V4.0 变更** | ⭐ 新增。入口：标题栏 [≡] 菜单 →「合并设置」；或连接点面板顶部齿轮图标 ⚙ |
 
-### 3.12 模块 M：搜索替换（V4.0 新增）
+### 3.9 已移除模块（E/H/M）
 
-| 属性 | 说明 |
-| :--- | :--- |
-| **职责** | Ctrl+H 唤起搜索框；预览区关键词高亮（黄色=匹配，橙色=当前焦点）；左侧面板临时切换为搜索结果列表（每条显示前后各 15 字上下文 + 点击跳转）；逐个替换 / 全部替换；替换入撤回栈 |
-| **源文件** | `SearchReplace.tsx`（V4.0 新建，内嵌于 CleanPanel） |
-| **依赖模块** | Store（`searchKeyword`, `replaceText`, `caseSensitive`, `searchResults`, `currentMatchIndex`, `isSearching`, `performSearch`, `replaceOne`, `replaceAll`, `clearSearch`）, PreviewPanel（高亮渲染）, ConnectionPointList（被搜索结果覆盖） |
-| **对外接口** | `performSearch(keyword)`, `replaceOne()`, `replaceAll()`, `clearSearch()` |
-| **V4.0 变更** | ⭐ 全新模块。可视为 CleanPanel 的子区域，但在功能上是独立的 PRD 模块 M（M1-M8）。搜索激活时 ConnectionPointList 被搜索结果列表覆盖；清空搜索框或点击 × 恢复连接点列表 |
+| 模块 | 原功能 | 移除原因 |
+|:---|:---|:---|
+| E. 内容清洗 | 繁简/全角转换、搜索替换 | 移至独立项目「Text Unifier 内容工具」 |
+| H. 撤回栈 | 5步撤回、Ctrl+Z/Y | 同上（预览区改为只读，无需撤回） |
+| M. 搜索替换 | Ctrl+H、高亮、替换 | 同上（与 E 合并移至内容工具） | |
 
 ---
 
@@ -296,8 +260,6 @@ sequenceDiagram
     UI->>Store: getPathForFile(file) 获取路径
     UI->>Store: addFiles(files)
     Store->>Store: 更新 sortedFileList
-    UI->>Store: clearUndoStack()
-    Store->>Store: 清空撤回栈
     UI->>IPC: mergeFiles(allPaths, threshold)
     IPC->>Main: ipcRenderer.invoke('merge-files', paths, threshold)
     Main->>Rust: merge_files(paths, threshold)
@@ -310,78 +272,11 @@ sequenceDiagram
     UI->>UI: ConnectionPointList + PreviewPanel（连续文本+连接标记）渲染
 ```
 
-### 4.2 内容清洗 + 搜索替换交互流（V4.0 扩展版）
+### 4.2 撤回/重做交互流（已移除）
 
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant CP as CleanPanel
-    participant Store as Zustand Store
-    participant Preview as PreviewPanel
-    participant ConnList as ConnectionPointList
+> 模块 H（撤回栈）已移至独立项目「Text Unifier 内容工具」。V4.0 预览区为只读，不涉及编辑操作，因此无撤回/重做交互。
 
-    Note over User,ConnList: ——— 繁简/全角转换 ———
-    User->>CP: 点击「繁→简」按钮
-    CP->>Store: toggleTraditional()
-    Store->>Store: pushSnapshot('繁→简转换')
-    Store->>Store: 对 mergedText 执行 toSimplified()
-    Store-->>Preview: 文本更新 + 连接标记重新定位
-    Store-->>CP: isTraditionalConverted = true<br/>按钮变灰「简→繁」
-
-    Note over User,ConnList: ——— 搜索替换（PRD M1-M8）———
-    User->>CP: Ctrl+H 或点击搜索框
-    CP->>Store: isSearching = true
-    User->>CP: 输入关键词 "Hello"
-    CP->>Store: performSearch("Hello")
-    Store->>Store: 搜索 mergedText → SearchResult[]
-    Store-->>Preview: 匹配项高亮（黄色底色，焦点橙色）
-    Store-->>ConnList: 面板切换为搜索结果列表<br/>标题「搜索结果 (N)」
-    Store-->>CP: 「第 1/3 个」
-
-    User->>CP: 点击「替换」
-    CP->>Store: replaceOne()
-    Store->>Store: pushSnapshot('替换'); 替换焦点项
-    Store-->>Preview: 高亮更新，焦点跳至下一项
-    Store-->>CP: 「第 2/3 个」
-
-    User->>CP: 点击「全部替换」
-    CP->>Store: replaceAll()
-    Store->>Store: pushSnapshot('全部替换'); 全部替换
-    Store-->>Preview: 高亮消失
-    Store-->>CP: Toast「已替换 3 处」
-
-    User->>CP: 清空搜索框
-    CP->>Store: clearSearch()
-    Store-->>ConnList: 面板恢复为连接点列表
-```
-
-### 4.3 撤回/重做交互流
-
-```mermaid
-sequenceDiagram
-    participant User as 用户
-    participant KB as 键盘/按钮
-    participant Store as Zustand Store
-    participant UI as PreviewPanel
-
-    Note over Store: undoStack = [S0, S1, S2]<br/>undoPointer = 2（栈顶）<br/>快照内容: mergedText + connectionStates + modifiedFlags
-
-    User->>KB: Ctrl+Z
-    KB->>Store: undo()
-    Store->>Store: undoPointer-- → 1
-    Store->>Store: 恢复 Snapshot[1]:<br/>mergedText, connectionStates, modifiedFlags
-    Store-->>UI: 预览区恢复到 S1 状态
-    Store-->>KB: 「↶ 撤回(1/3)」
-
-    User->>KB: Ctrl+Y
-    KB->>Store: redo()
-    Store->>Store: undoPointer++ → 2
-    Store->>Store: 恢复 Snapshot[2]
-    Store-->>UI: 预览区恢复到 S2 状态
-    Store-->>KB: 「↷ 重做」
-```
-
-### 4.4 文档对比交互流
+### 4.3 文档对比交互流（保留）
 
 ```mermaid
 sequenceDiagram
@@ -410,7 +305,7 @@ sequenceDiagram
     end
 ```
 
-### 4.5 导出交互流
+### 4.4 导出交互流
 
 ```mermaid
 sequenceDiagram
@@ -482,16 +377,7 @@ App
 │   │   ├── SourceTooltip (hover 300ms, 跟随鼠标+8px)
 │   │   │   └── "来源: A.txt" / "重叠区: A ↔ B (N字)"
 │   │   └── EmptyState "拖拽 .txt 文件到此处或点击 + 按钮添加"
-│   │
-│   └── CleanPanel (w-260)
-│       ├── ToggleButton (全角↔半角)
-│       ├── ToggleButton (繁简)
-│       └── SearchReplace
-│           ├── SearchInput (关键词 + ×清除 + "第 M/N 个" 计数)
-│           ├── ReplaceInput (替换词)
-│           ├── CaseSensitiveCheckbox
-│           ├── ReplaceButton (替换)
-│           └── ReplaceAllButton (全部替换)
+│   └── （CleanPanel/SearchReplace 已移除 —— E/M 模块移至独立项目「内容工具」）
 │
 ├── [Compare Mode] DiffViewer
 │   ├── DiffLeftPanel (50%)
@@ -502,11 +388,8 @@ App
 │   └── DiffStats (底部统计栏)
 │
 ├── BottomToolbar
-│   ├── UndoButton "↶ 撤回(N/5)"
-│   ├── RedoButton "↷ 重做"
 │   ├── StatusBar "总 N 字 | 连接点 M (自动A/待确认B) | 预估 X KB"
 │   ├── Spacer
-│   ├── RevertButton "↶ 还原"
 │   └── ExportButton "⏎ 导出"
 │
 └── ToastContainer (fixed top-right, z-60)

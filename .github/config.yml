@@ -1,0 +1,18 @@
+# Text Unifier — GitHub Release 配置
+# 版本: V4.0.0
+# 自动生成: 部署运维流程 (2026-06-03)
+
+release:
+  title_template: "v{version} — {summary}"
+  tag_template: "v{version}"
+  categories:
+    - title: "✨ 核心新特性"
+      labels: ["feature", "enhancement"]
+    - title: "🐛 Bug 修复"
+      labels: ["bug", "fix"]
+    - title: "🔧 工程改进"
+      labels: ["chore", "refactor", "engineering"]
+    - title: "📄 文档"
+      labels: ["documentation", "docs"]
+    - title: "🧹 清理与移除"
+      labels: ["cleanup", "removal"]

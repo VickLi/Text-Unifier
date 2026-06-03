@@ -15,9 +15,7 @@ import type {
   SearchResult,
   ToastMessage,
 } from '../types';
-import { DEFAULT_V3_2_STATE, DEFAULT_V3_3_STATE, DEFAULT_V4_0_STATE } from './defaults';
-
-import { toSimplified, toTraditional } from '../utils/cjkConv';
+import { DEFAULT_V3_2_STATE, DEFAULT_V4_0_STATE } from './defaults';
 
 // ==========================================
 // 辅助函数
@@ -28,20 +26,6 @@ function detectEncoding(_path: string): string {
   // 前端无法检测编码，统一返回 UTF-8
   // 后端实际检测后通过 FileMeta 返回
   return 'UTF-8';
-}
-
-/** V3.3: 全角→半角字符转换（纯 TS，无依赖） */
-function toHalfWidth(text: string): string {
-  return text.replace(/[\uFF01-\uFF5E]/g, (ch) =>
-    String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)
-  ).replace(/\u3000/g, ' '); // 全角空格→半角空格
-}
-
-/** V3.3: 半角→全角字符转换（反向恢复） */
-function toFullWidth(text: string): string {
-  return text.replace(/[\u0021-\u007E]/g, (ch) =>
-    String.fromCharCode(ch.charCodeAt(0) + 0xFEE0)
-  ).replace(/ /g, '\u3000'); // 半角空格→全角空格
 }
 
 // ==========================================
@@ -130,13 +114,6 @@ interface AppState {
   setActiveMode: (mode: AppMode) => void;
 
   // ═══════════════════════════════════════════
-  // V3.2 新增字段 — 预览编辑（V4.0 保留）
-  // ═══════════════════════════════════════════
-
-  isEditing: boolean;
-  toggleEditing: () => void;
-
-  // ═══════════════════════════════════════════
   // V3.2 新增字段 — 撤回栈（V4.0：快照内容改为 mergedText 模型）
   // ═══════════════════════════════════════════
 
@@ -173,17 +150,6 @@ interface AppState {
   diffLeftFileName: string | null;
   diffRightFileName: string | null;
   setDiffResult: (alignment: DiffAlignment[], leftFile: string, rightFile: string) => void;
-
-  // ═══════════════════════════════════════════
-  // V3.3 新增字段 — RQ-05 双向切换（V4.0：改为操作 mergedText）
-  // ═══════════════════════════════════════════
-
-  isFullWidthConverted: boolean;
-  isTraditionalConverted: boolean;
-  /** 繁简转换防抖锁 */
-  isConverting: boolean;
-  toggleFullWidth: () => void;
-  toggleTraditional: () => Promise<void>;
 
   // ═══════════════════════════════════════════
   // V4.0 新增字段 — UI 状态
@@ -303,8 +269,6 @@ export const useStore = create<AppState>((set, get) => ({
   ...DEFAULT_V3_2_STATE,
 
   // V3.3 新增字段
-  ...DEFAULT_V3_3_STATE,
-
   // ═══════════════════════════════════════════
   // V1.0 Actions
   // ═══════════════════════════════════════════
@@ -448,7 +412,6 @@ export const useStore = create<AppState>((set, get) => ({
       hoverPosition: null,
       activeDragFileId: null,
       ...DEFAULT_V3_2_STATE,
-      ...DEFAULT_V3_3_STATE,
       ...DEFAULT_V4_0_STATE,
       minimapItems: [],
       minimapItemCount: 0,
@@ -585,14 +548,11 @@ export const useStore = create<AppState>((set, get) => ({
         activeMode: mode,
         undoStack: [],
         undoPointer: -1,
-        isEditing: false,
         diffAlignment: [],
         diffLeftFileName: null,
         diffRightFileName: null,
       };
     }),
-
-  toggleEditing: () => set((state) => ({ isEditing: !state.isEditing })),
 
   pushSnapshot: (reason) =>
     set((state) => {
@@ -648,39 +608,6 @@ export const useStore = create<AppState>((set, get) => ({
       diffLeftFileName: leftFile,
       diffRightFileName: rightFile,
     }),
-
-  // ═══════════════════════════════════════════
-  // V3.3 Actions — RQ-05 双向切换（V4.0：改为操作 mergedText 字符串）
-  // ═══════════════════════════════════════════
-
-  toggleFullWidth: () =>
-    set((state) => {
-      if (!state.mergedText) return state;
-      const newConverted = !state.isFullWidthConverted;
-      const resultText = newConverted ? toHalfWidth(state.mergedText) : toFullWidth(state.mergedText);
-      return {
-        isFullWidthConverted: newConverted,
-        mergedText: resultText,
-      };
-    }),
-
-  toggleTraditional: async () => {
-    const state = get();
-    if (state.isConverting || !state.mergedText) return;
-    set({ isConverting: true });
-    try {
-      const newConverted = !state.isTraditionalConverted;
-      const resultText = newConverted ? toSimplified(state.mergedText) : toTraditional(state.mergedText);
-      get().pushSnapshot(newConverted ? '繁→简' : '简→繁');
-      set({
-        isTraditionalConverted: newConverted,
-        mergedText: resultText,
-        isConverting: false,
-      });
-    } catch {
-      set({ isConverting: false });
-    }
-  },
 
   // ═══════════════════════════════════════════
   // V4.0 Actions — 合并引擎
