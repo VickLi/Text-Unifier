@@ -3,7 +3,7 @@
 > **最新版本**: v4.0.0 — [部署产出](05-deployment/)
 > **架构**: Electron 31 + napi-rs (Rust) + React 18 + TypeScript
 
-> 一款完全离线的桌面工具，用于多 TXT 文件链式重叠合并、内容清洗、预览编辑、文档对比与一键导出。
+> 一款完全离线的桌面工具，用于多 TXT 文件链式重叠合并、连接点交互、文档对比与一键导出。
 
 ---
 
@@ -54,7 +54,6 @@ Text Unifier/
 │   ├── utils/
 │   │   ├── ipc.ts             # Electron IPC 封装
 │   │   ├── diffUtils.ts       # 文档对比算法
-│   │   └── cjkConv.ts         # 繁简/全半角转换
 │   └── components/
 │       ├── App.tsx             # 根组件
 │       ├── ModeTabs.tsx        # 模式切换
@@ -63,10 +62,8 @@ Text Unifier/
 │       ├── SortableChip.tsx    # 可排序芯片
 │       ├── ConnectionPointList.tsx  # 连接点列表
 │       ├── ConnectionPointItem.tsx  # 连接点项
-│       ├── PreviewPanel.tsx    # 可编辑预览区
+│       ├── PreviewPanel.tsx    # 预览区（只读 + 连接标记）
 │       ├── Minimap.tsx         # 缩略图
-│       ├── CleanPanel.tsx      # 清洗面板
-│       ├── SearchReplace.tsx   # 搜索替换
 │       ├── DiffViewer.tsx      # 文档对比
 │       ├── ExportButton.tsx    # 导出
 │       ├── MergeSettings.tsx   # 合并设置
@@ -127,7 +124,7 @@ npm run build
 ### 4. 编译 Rust napi 原生模块
 
 ```bash
-cd native && npx napi build --platform --release
+cd 03-code/native && npx napi build --platform --release
 ```
 
 ### 5. 开发模式运行
@@ -152,19 +149,17 @@ npm run electron:build
 | **A. 文件输入** | 拖拽/按钮上传 .txt | 全窗口蓝色遮罩，仅接受 .txt |
 | **B. 链式重叠合并** | 字符级最长后缀-前缀匹配 | V4.0 全新算法，替代段落哈希去重 |
 | **C. 连接点列表** | 重叠信息展示 + 切换合并/保留 | 自动合并(灰色)/待确认(高亮) |
-| **D. 预览区** | 连续文本可编辑 + Minimap | 连接标记可视化，Ctrl+Z/Y 撤回 |
-| **E. 内容清洗** | 繁简转换 + 全角半角转换 | 双向 ToggleButton |
-| **H. 撤回栈** | 5 步 FIFO | Ctrl+Z/Y，导出后保留 |
+| **C. 连接点列表** | 重叠信息展示 + 切换合并/保留 | 自动合并(灰色)/待确认(高亮) |
+| **D. 预览区** | 连续文本只读 + 连接标记 + Minimap | 灰色虚线=自动合并，蓝色虚线=待确认 |
 | **I. 文档对比** | 双栏 LCS 对齐 + 四色渲染 | 同步滚动，词级差异高亮 |
 | **J. 导出** | UTF-8 BOM .txt | 排除连接标记，Ctrl+S 快捷键 |
 | **L. 合并设置** | 重叠阈值可调 (10~500) | 持久化到 IndexedDB |
-| **M. 搜索替换** | Ctrl+H 高亮搜索 + 替换 | 逐个/全部替换，入撤回栈 |
 
 ## 版本历史
 
 | 版本 | 日期 | 架构 | 说明 |
 | :--- | :--- | :--- | :--- |
-| **v4.0.0** | 2026-05-22 | Electron + napi-rs | ✅ **当前最新** — 链式重叠合并 + 搜索替换 + 项目重构 |
+| **v4.0.0** | 2026-06-03 | Electron + napi-rs | ✅ **当前最新** — 链式重叠合并 + 连接点交互 + 项目重构（最终稳定版） |
 | v3.3 | 2026-05-21 | Electron + napi-rs | UX 改进 + 隐私修复 |
 | v3.2.3 | 2026-05-20 | Electron + napi-rs | 拖拽修复 + asar 加载修复 |
 | v3.2.2 | 2026-05-19 | Electron + napi-rs | Bug 修复 + 代码精简 |
@@ -202,8 +197,8 @@ npx electron-builder --win portable  # 打包便携版
 - **安全 IPC**：通过 Electron contextBridge + ipcMain 隔离通信
 - **链式重叠合并**：V4.0 全新算法 — 字符级最长后缀-前缀匹配，替代 V3.3 段落哈希去重
 - **原生性能**：Rust 核心引擎（napi-rs）处理编码探测、文本归一化、链式合并
-- **前端离线引擎**：繁简转换、全半角转换、文档对比算法全部在纯前端完成
-- **5 步撤回栈**：深拷贝快照，Ctrl+Z/Y，导出后保留
+- **连接点交互模型**：连续文本 + 连接点，取代 V3.3 段落列表 + 勾选模型
+- **模块化设计**：内容清洗、搜索替换已移至独立项目「Text Unifier 内容工具」
 
 ## 许可
 
