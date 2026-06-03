@@ -192,22 +192,4 @@ export interface ToastMessage {
   timestamp: number;
 }
 
-// ═══════════════════════════════════════════
-// V4.0 Feature Flag — 增量集成控制
-// ═══════════════════════════════════════════
-
-/** 功能开关：控制各模块的逐条启用 */
-export interface FeatureFlags {
-  /** 功能线③：文档对比 */
-  diffViewer: boolean;
-  /** 功能线②：内容清洗（繁简/全半角） */
-  cleaning: boolean;
-  /** 功能线②：搜索替换 */
-  searchReplace: boolean;
-  /** 功能线②：撤回/重做 */
-  undoRedo: boolean;
-  /** 功能线②：导出 */
-  exportFeature: boolean;
-  /** 功能线①：合并去重核心 */
-  mergeCore: boolean;
-}
+// V4.0 Feature Flag 已移除（v4.0-full-stable）

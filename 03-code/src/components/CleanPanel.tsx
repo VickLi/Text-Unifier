@@ -31,38 +31,49 @@ export const CleanPanel: React.FC = () => {
     await toggleTraditional();
   }, [toggleTraditional]);
 
+  // V4.0.0: E(清洗) / M(搜索) / H(撤回) 暂不启用
+  const MODULE_E_ENABLED = false;
+  const MODULE_M_ENABLED = false;
+
   return (
     <div className="space-y-4">
       <h4 className="text-sm font-medium text-gray-700">内容清洗</h4>
 
-      {/* 繁简转换 ToggleButton */}
-      <div>
-        <label className="block text-xs text-gray-500 mb-1">繁简转换</label>
-        <ToggleButton
-          labelForward="繁→简"
-          labelBackward="简→繁"
-          isToggled={isTraditionalConverted}
-          onToggle={handleTraditionalToggle}
-          disabled={!hasContent || isConverting}
-        />
-      </div>
+      {MODULE_E_ENABLED && (
+        <>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">繁简转换</label>
+            <ToggleButton
+              labelForward="繁→简"
+              labelBackward="简→繁"
+              isToggled={isTraditionalConverted}
+              onToggle={handleTraditionalToggle}
+              disabled={!hasContent || isConverting}
+            />
+          </div>
 
-      {/* 全角↔半角 ToggleButton */}
-      <div>
-        <label className="block text-xs text-gray-500 mb-1">全角↔半角</label>
-        <ToggleButton
-          labelForward="全角→半角"
-          labelBackward="半角→全角"
-          isToggled={isFullWidthConverted}
-          onToggle={handleFullWidthToggle}
-          disabled={!hasContent}
-        />
-      </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">全角↔半角</label>
+            <ToggleButton
+              labelForward="全角→半角"
+              labelBackward="半角→全角"
+              isToggled={isFullWidthConverted}
+              onToggle={handleFullWidthToggle}
+              disabled={!hasContent}
+            />
+          </div>
 
-      <hr className="border-gray-200" />
+          <hr className="border-gray-200" />
+        </>
+      )}
 
-      {/* 搜索替换 */}
-      <SearchReplace />
+      {MODULE_M_ENABLED && <SearchReplace />}
+
+      {!MODULE_E_ENABLED && !MODULE_M_ENABLED && (
+        <div className="text-center py-6 text-gray-400">
+          <p className="text-xs">内容增强模块将在 V4.0.1 中推出</p>
+        </div>
+      )}
     </div>
   );
 };

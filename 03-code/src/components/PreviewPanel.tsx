@@ -19,10 +19,6 @@ export const PreviewPanel: React.FC = () => {
   const isAnalyzing = useStore((s) => s.isAnalyzing);
   const isEditing = useStore((s) => s.isEditing);
   const toggleEditing = useStore((s) => s.toggleEditing);
-  const undo = useStore((s) => s.undo);
-  const redo = useStore((s) => s.redo);
-  const undoStack = useStore((s) => s.undoStack);
-  const undoPointer = useStore((s) => s.undoPointer);
   const pushSnapshot = useStore((s) => s.pushSnapshot);
   const exportMergedText = useStore((s) => s.exportMergedText);
 
@@ -64,25 +60,16 @@ export const PreviewPanel: React.FC = () => {
     updateMinimap();
   }, [mergedText, updateMinimap]);
 
-  // 键盘快捷键（Ctrl+Z/Y 撤回/重做，Ctrl+S 导出）
+  // 键盘快捷键（V4.0.0：仅 Ctrl+S 导出）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault(); undo();
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault(); redo();
-      }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault(); exportMergedText();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, exportMergedText]);
-
-  const canUndo = undoPointer > 0;
-  const canRedo = undoPointer < undoStack.length - 1;
+  }, [exportMergedText]);
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setLocalText(e.target.value);
@@ -266,11 +253,6 @@ export const PreviewPanel: React.FC = () => {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={undo} disabled={!canUndo}
-            className={`text-xs px-2 py-0.5 rounded ${canUndo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}>↶ 撤回</button>
-          <button onClick={redo} disabled={!canRedo}
-            className={`text-xs px-2 py-0.5 rounded ${canRedo ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}>↷ 重做</button>
-          {undoStack.length > 0 && <span className="text-xs text-gray-400">{undoPointer + 1}/{undoStack.length}</span>}
           <span className="text-xs text-gray-400">{lineCount} 行 · {charCount.toLocaleString()} 字符</span>
         </div>
       </div>

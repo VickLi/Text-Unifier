@@ -183,7 +183,6 @@ const App: React.FC = () => {
           {status === 'ready' && (
             `总 ${mergedText.length} 字 | 连接点 ${connectionPoints.length} (自动${connectionPoints.filter(cp => connectionStates[cp.id] ?? cp.isAutoMerged).length}/待确认${connectionPoints.filter(cp => !(connectionStates[cp.id] ?? cp.isAutoMerged)).length}) | 预估 ${Math.max(1, Math.round(mergedText.length / 500))} KB`
           )}
-          {status === 'ready' && !featureFlags.mergeCore && `分析完成 — ${sortedFileList.length} 个文件`}
           {status === 'error' && '分析出错，请重试'}
         </span>
         <span className="text-xs text-gray-400">
