@@ -67,7 +67,7 @@ export const DEFAULT_V4_0_STATE = {
 
 // V4.0 Feature Flag 默认值（全部初始 false，按阶段逐步启用）
 export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
-  diffViewer: false,
+  diffViewer: true,
   cleaning: false,
   searchReplace: false,
   undoRedo: false,
