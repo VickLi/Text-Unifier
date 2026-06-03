@@ -73,6 +73,6 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
   cleaning: false,
   searchReplace: false,
   undoRedo: false,
-  exportFeature: false,
+  exportFeature: true,
   mergeCore: true,
 };
