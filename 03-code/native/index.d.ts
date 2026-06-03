@@ -10,6 +10,8 @@ export interface MergeResult {
   filesMetadata: Array<FileMeta>
   skippedFiles: Array<string>
   encodingWarnings: Array<string>
+  /** 每个文件的归一化后完整内容（用于前端动态重建 mergedText） */
+  fileContents: Array<string>
 }
 export interface ConnectionPoint {
   id: string

@@ -166,6 +166,8 @@ export interface MergeResult {
   skippedFiles: string[];
   /** 编码探测警告 */
   encodingWarnings: string[];
+  /** 每个文件的归一化后完整内容（用于前端动态重建 mergedText） */
+  fileContents: string[];
 }
 
 /** 搜索结果项 */

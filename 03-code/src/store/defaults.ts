@@ -59,6 +59,8 @@ export const DEFAULT_V4_0_STATE = {
   lastExportSnapshot: null as import('../types').Snapshot | null,
   /** 繁简转换防抖锁 */
   isConverting: false,
+  /** 每个文件的归一化后完整内容 */
+  fileContents: [] as string[],
   /** 连接点列表面板宽度（px） */
   connectionListWidth: 280,
   /** Toast 消息队列 */

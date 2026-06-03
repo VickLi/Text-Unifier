@@ -13,6 +13,8 @@ pub struct MergeResult {
     pub files_metadata: Vec<FileMeta>,
     pub skipped_files: Vec<String>,
     pub encoding_warnings: Vec<String>,
+    /// 每个文件的归一化后完整内容（用于前端动态重建 mergedText）
+    pub file_contents: Vec<String>,
 }
 
 #[napi(object)]
@@ -54,7 +56,7 @@ pub fn chain_merge(file_data_list: Vec<FileData>, threshold: u32) -> MergeResult
 
     if file_data_list.is_empty() {
         return MergeResult { merged_text: String::new(), connection_points: vec![], total_chars: 0,
-            files_metadata, skipped_files: vec![], encoding_warnings: vec![] };
+            files_metadata, skipped_files: vec![], encoding_warnings: vec![], file_contents: vec![] }; 
     }
 
     for fd in &file_data_list {
@@ -104,8 +106,13 @@ pub fn chain_merge(file_data_list: Vec<FileData>, threshold: u32) -> MergeResult
         }
     }
 
+    // 收集非跳过文件的归一化内容（用于前端动态重建 mergedText）
+    let file_contents: Vec<String> = file_data_list.into_iter()
+        .filter(|fd| !skipped_files.contains(&fd.file_name))
+        .map(|fd| fd.content)
+        .collect();
     MergeResult { total_chars: merged_text.chars().count() as u32, merged_text, connection_points,
-        files_metadata, skipped_files, encoding_warnings }
+        files_metadata, skipped_files, encoding_warnings, file_contents }
 }
 
 fn find_overlap(haystack: &str, needle: &str) -> usize {

@@ -218,6 +218,8 @@ interface AppState {
   ) => void;
   /** V4.0：设置合并结果（链式重叠合并） */
   setMergeResult: (result: MergeResult) => void;
+  /** 每个文件的归一化后完整内容 */
+  fileContents: string[];
   setHoveredParagraph: (
     id: string | null,
     sourceFiles?: string[],
@@ -365,6 +367,7 @@ export const useStore = create<AppState>((set, get) => ({
           fileList: [], sortedFileList: [], duplicateGroups: [],
           originalPreview: [], previewParagraphs: [], paragraphCheckedMap: new Map(),
           mergedText: '', connectionPoints: [], connectionStates: {},
+          fileContents: [],
           status: 'idle', minimapItems: [], minimapItemCount: 0,
         };
       }
@@ -727,6 +730,7 @@ export const useStore = create<AppState>((set, get) => ({
         mergedText: result.mergedText,
         connectionPoints: result.connectionPoints,
         connectionStates: newStates,
+        fileContents: result.fileContents,
         isAnalyzing: false,
         analyzeError: null,
         status: 'ready',
@@ -754,7 +758,25 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => {
       const newStates = { ...state.connectionStates };
       newStates[cpId] = !(newStates[cpId] ?? true);
-      return { connectionStates: newStates };
+
+      // 根据 fileContents 和连接状态重建 mergedText
+      if (state.fileContents.length === 0) return { connectionStates: newStates };
+
+      let rebuilt = state.fileContents[0];
+      for (let i = 1; i < state.fileContents.length; i++) {
+        const cp = state.connectionPoints[i - 1];
+        if (!cp) { rebuilt += '\n' + state.fileContents[i]; continue; }
+        const isMerged = newStates[cp.id] ?? cp.isAutoMerged;
+        if (isMerged) {
+          // 合并态：跳过重叠部分
+          rebuilt += state.fileContents[i].slice(cp.overlapLength);
+        } else {
+          // 保留态：完整追加（带 \n 分隔）
+          rebuilt += '\n' + state.fileContents[i];
+        }
+      }
+
+      return { connectionStates: newStates, mergedText: rebuilt };
     }),
 
   /**
