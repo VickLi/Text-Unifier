@@ -34,14 +34,18 @@ export const ModeTabs: React.FC = () => {
       {modes.map((m) => (
         <button
           key={m.key}
-          onClick={() => setActiveMode(m.key)}
-          disabled={m.key === 'compare' && sortedFileList.length > 2}
+          onClick={() => {
+            if (m.key === 'compare' && sortedFileList.length > 2) {
+              useStore.getState().showToast('文档对比仅支持 2 个文件，请先移除多余文件', 'error');
+              return;
+            }
+            setActiveMode(m.key);
+          }}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             activeMode === m.key
               ? 'border-blue-500 text-blue-600'
               : 'border-transparent text-gray-500 hover:text-gray-700'
-          } ${m.key === 'compare' && sortedFileList.length > 2 ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title={m.key === 'compare' && sortedFileList.length > 2 ? '对比模式仅支持 2 个文件' : undefined}
+          }`}
         >
           {m.icon} {m.label}
         </button>

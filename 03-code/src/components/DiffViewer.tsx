@@ -85,8 +85,11 @@ export const DiffViewer: React.FC = () => {
     diffCount: diffAlignment.filter(a => a.type === 'diff').length,
   };
 
-  if (sortedFileList.length !== 2) {
-    return <div className="flex-1 flex items-center justify-center text-gray-400"><p className="text-sm">对比模式需要恰好 2 个文件</p></div>;
+  if (sortedFileList.length < 2) {
+    return <div className="flex-1 flex items-center justify-center text-gray-400"><p className="text-sm">请添加第二个文件以进行对比</p></div>;
+  }
+  if (sortedFileList.length > 2) {
+    return <div className="flex-1 flex items-center justify-center text-gray-400"><p className="text-sm">文档对比仅支持 2 个文件，请先移除多余文件</p></div>;
   }
 
   const leftBar = (t: string) => (
